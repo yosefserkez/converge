@@ -1820,6 +1820,15 @@ export class ProjectCoordinator extends DurableObject<Env> {
             this.db.run("UPDATE outbox SET status = 'delivered', last_error_code = 'SUPERSEDED', updated_at = ? WHERE id = ?", now, item.id);
             continue;
           }
+          // Resource policy: defer, do not drop, work that would exceed the agent or container limits.
+          const limit = this.capacityBlock(String(payload.kind));
+          if (limit) {
+            this.db.run(
+              "UPDATE outbox SET status = 'pending', attempts = attempts - 1, next_attempt_at = ?, last_error_code = ?, updated_at = ? WHERE id = ?",
+              now + 5000, limit, now, item.id,
+            );
+            continue;
+          }
           await this.createWorkflow(String(payload.workflowId), {
             jobId: String(payload.jobId),
             attemptNo: Number(payload.attemptNo),
@@ -1852,6 +1861,19 @@ export class ProjectCoordinator extends DurableObject<Env> {
       }
     }
     return count;
+  }
+
+  /** Name of the limit that blocks a new job of this kind, or null when there is capacity. */
+  private capacityBlock(kind: string): string | null {
+    const busy = (kinds: string[]) =>
+      this.db.value<number>(
+        `SELECT count(*) FROM job WHERE status IN ('leased','running') AND kind IN (${kinds.map(() => '?').join(',')})`,
+        ...kinds,
+      ) ?? 0;
+    if (kind === 'agent' && busy(['agent']) >= this.config.MAX_CONCURRENT_AGENTS) return 'MAX_CONCURRENT_AGENTS';
+    // Agent checks, verification, and previews use execution containers.
+    if (['agent', 'verify'].includes(kind) && busy(['agent', 'verify']) >= this.config.MAX_ACTIVE_CONTAINERS) return 'MAX_ACTIVE_CONTAINERS';
+    return null;
   }
 
   private async createWorkflow(id: string, params: { jobId: string; attemptNo: number; fence: number; kind: string }) {
