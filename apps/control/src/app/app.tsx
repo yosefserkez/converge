@@ -55,7 +55,7 @@ export function App({ sample }: { sample: { variant: string; variants: readonly 
               <Menu className="size-4" aria-hidden /> Menu
             </button>
           </div>
-          <main id="main" className="w-full max-w-[1400px] flex-1 px-4 py-5 md:px-6">
+          <main id="main" tabIndex={-1} className="w-full max-w-[1400px] flex-1 px-4 py-5 outline-none md:px-6">
             {route.name === 'home' && <HomePage />}
             {route.name === 'settings' && <SettingsPage />}
             {route.name === 'session' && <SessionPage key={route.sessionId} sessionId={route.sessionId} />}
