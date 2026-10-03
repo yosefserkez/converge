@@ -51,32 +51,51 @@ export class PreviewEntrypoint extends WorkerEntrypoint<Env> {
       return { status: 410, headers: {}, body: 'preview expired or unavailable' };
     }
     const exec = this.env.EXECUTION.getByName(resolved.resourceId);
+    const boot = async () => {
+      const bundle = await this.materialize(resolved.repoName, resolved.headSha);
+      const loaded = await exec.load(bundle);
+      const built = loaded.exitCode === 0 ? await exec.runTool('build') : loaded;
+      if (built.exitCode !== 0) throw new DomainError('INTERNAL', 'preview build failed');
+      await exec.startApp();
+      await coordinator.markPreview(resolved.resourceId, 'active');
+    };
+    const fail = async () => {
+      await coordinator.markPreview(resolved.resourceId, 'error');
+      await exec.destroyContainer('preview failed').catch(() => undefined);
+      return { status: 503, headers: {}, body: 'preview could not start' };
+    };
     if (resolved.state === 'starting') {
       try {
-        const bundle = await this.materialize(resolved.repoName, resolved.headSha);
-        const loaded = await exec.load(bundle);
-        const built = loaded.exitCode === 0 ? await exec.runTool('build') : loaded;
-        if (built.exitCode !== 0) throw new DomainError('INTERNAL', 'preview build failed');
-        await exec.startApp();
-        await coordinator.markPreview(resolved.resourceId, 'active');
+        await boot();
       } catch {
-        await coordinator.markPreview(resolved.resourceId, 'error');
-        await exec.destroyContainer('preview failed').catch(() => undefined);
-        return { status: 503, headers: {}, body: 'preview could not start' };
+        return fail();
       }
     }
-    const res = await exec.appRequest(
-      {
-        method: method === 'POST' ? 'POST' : 'GET',
-        path: `${path}${query}`,
-        headers: {
-          ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
-          'x-demo-customer': customer === 'member-1' ? 'member-1' : 'regular-1',
+    const send = () =>
+      exec.appRequest(
+        {
+          method: method === 'POST' ? 'POST' : 'GET',
+          path: `${path}${query}`,
+          headers: {
+            ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+            'x-demo-customer': customer === 'member-1' ? 'member-1' : 'regular-1',
+          },
+          ...(body !== null ? { body } : {}),
         },
-        ...(body !== null ? { body } : {}),
-      },
-      PREVIEW_MAX_BYTES,
-    );
+        PREVIEW_MAX_BYTES,
+      );
+    let res: Awaited<ReturnType<typeof send>>;
+    try {
+      res = await send();
+    } catch {
+      // The container restarted (for example after a deploy). Rebuild it once within the same absolute expiry.
+      try {
+        await boot();
+        res = await send();
+      } catch {
+        return fail();
+      }
+    }
     // A cut-off asset would break the page silently; say so instead.
     if (res.truncated) return { status: 502, headers: {}, body: 'preview response is larger than the preview limit' };
     return { status: res.status, headers: res.headers, body: res.bodyText };
