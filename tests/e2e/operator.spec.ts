@@ -9,7 +9,10 @@ const REPLAY_ID = process.env.CONVERGE_E2E_REPLAY ?? 'rpl_suwonabsqmruq2gq6pvnct
 
 /** On phones the sidebar is a menu; open it before reading project and session links. */
 async function openNav(page: Page, isMobile: boolean) {
-  if (isMobile) await page.getByRole('button', { name: 'Open the project and session menu' }).click();
+  if (!isMobile) return;
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Open the project and session menu' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 }
 
 async function noHorizontalOverflow(page: Page) {

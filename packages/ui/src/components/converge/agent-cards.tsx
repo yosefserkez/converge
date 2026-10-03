@@ -94,7 +94,7 @@ export function AgentCard({
             <p className="mb-1 font-medium">Declares</p>
             <ul className="flex flex-col gap-1">
               {intent.contractChanges.map((c) => (
-                <li key={c.key} className="font-mono text-[11px] leading-4">
+                <li key={c.key} className="font-mono text-[11px] leading-4 [overflow-wrap:anywhere]">
                   {c.key}: {formatValue(c.before)} → <span className="text-foreground">{formatValue(c.after)}</span>
                 </li>
               ))}
@@ -106,7 +106,7 @@ export function AgentCard({
             <p className="mb-1 font-medium">Assumes</p>
             <ul className="flex flex-col gap-1">
               {intent.assumptions.map((a) => (
-                <li key={`${a.key}-${a.operator}`} className="font-mono text-[11px] leading-4">
+                <li key={`${a.key}-${a.operator}`} className="font-mono text-[11px] leading-4 [overflow-wrap:anywhere]">
                   {a.key} {a.operator.replace('_', ' ')} {formatValue(a.expected)}
                 </li>
               ))}
