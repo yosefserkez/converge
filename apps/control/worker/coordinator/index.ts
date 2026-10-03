@@ -770,6 +770,25 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const c = this.candidateRow(candidateId);
     if (!c.head_sha) throw new DomainError('INVALID_STATE', 'candidate is not materialized yet');
     const now = Date.now();
+    // Reuse a live preview of this exact candidate: same capability, same absolute expiry (never extended).
+    const live = this.db.one<{ id: string; resource_id: string; nonce: string; expires_at: number }>(
+      "SELECT id, resource_id, nonce, expires_at FROM preview WHERE candidate_id = ? AND head_sha = ? AND state IN ('starting','active') AND expires_at > ? ORDER BY created_at DESC LIMIT 1",
+      c.id, c.head_sha, now + 30_000,
+    );
+    if (live) {
+      return {
+        status: 201,
+        body: {
+          previewId: live.id,
+          capability: {
+            version: 1, scope: 'candidate-preview', projectId: this.config.PROJECT_SLUG, candidateId: c.id,
+            headSha: c.head_sha, resourceId: live.resource_id, expiresAt: live.expires_at, nonce: live.nonce,
+          },
+          repoName: c.repo_name,
+          reused: true,
+        },
+      };
+    }
     const active = this.db.value<number>("SELECT count(*) FROM preview WHERE state IN ('starting','active') AND expires_at > ?", now) ?? 0;
     if (active >= 2) throw new DomainError('LIMIT_EXCEEDED', 'preview limit reached; wait for an existing preview to expire');
     const id = newId('prev');
