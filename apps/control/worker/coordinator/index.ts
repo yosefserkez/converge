@@ -170,7 +170,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
       case 'seed':
         return this.seed(cmd.actor);
       case 'createSession':
-        return this.createSession(cmd.actor, p as { mode: 'live' | 'fixture'; modelBudgetMicroUsd?: number });
+        return this.createSession(cmd.actor, p as { mode: 'live' | 'fixture'; modelBudgetMicroUsd?: number }, await commandId('ses', cmd));
       case 'startSession':
         return this.startSession(cmd.actor, String(p.sessionId));
       case 'cancelSession':
@@ -180,7 +180,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
       case 'requestRepair':
         return this.requestRepair(cmd.actor, String(p.candidateId));
       case 'approve':
-        return this.approve(cmd.actor, p as never);
+        return this.approve(cmd.actor, p as never, await commandId('appr', cmd));
       case 'promote':
         return this.promote(cmd.actor, String(p.approvalId));
       case 'createPreview':
@@ -257,7 +257,9 @@ export class ProjectCoordinator extends DurableObject<Env> {
     return { status: 202, body: { projectId: slug, canonicalRepo, jobId: job.id } };
   }
 
-  private async createSession(actor: string, params: { mode: 'live' | 'fixture'; modelBudgetMicroUsd?: number }): Promise<CommandResult> {
+  private async createSession(actor: string, params: { mode: 'live' | 'fixture'; modelBudgetMicroUsd?: number }, sessionId: string): Promise<CommandResult> {
+    // A re-run after a crash between the state commit and the receipt finds the same session.
+    if (this.db.value<string>('SELECT id FROM session WHERE id = ?', sessionId)) return { status: 201, body: { sessionId } };
     const cfg = this.config;
     const project = this.requireProject();
     const projectPolicy = parse<ProjectPolicy>(project.policy_json);
@@ -288,7 +290,6 @@ export class ProjectCoordinator extends DurableObject<Env> {
       }
     }
     const now = Date.now();
-    const sessionId = newId('ses');
     const tasks: TaskSpec[] = STOREFRONT_TASKS.map((t) => ({ ...t, baselineSha: mainSha }));
     const environmentDigest = await digestOf({ lockfileDigest: projectPolicy.lockfileDigest, verifierBuildId: cfg.BUILD_ID, image: 'workspace' });
     const policy: SessionPolicy = {
@@ -610,7 +611,10 @@ export class ProjectCoordinator extends DurableObject<Env> {
   private async approve(
     actor: string,
     req: { candidateId: string; headSha: string; expectedMainSha: string; validationDigest: string; decision: 'approve' | 'reject' },
+    id: string,
   ): Promise<CommandResult> {
+    const prior = this.db.one<{ decision: string; expires_at: number }>('SELECT decision, expires_at FROM approval WHERE id = ?', id);
+    if (prior) return { status: 201, body: { approvalId: id, decision: prior.decision, expiresAt: prior.expires_at } };
     const c = this.candidateRow(req.candidateId);
     const project = this.requireProject();
     const session = getSession(this.db, c.session_id);
@@ -652,7 +656,6 @@ export class ProjectCoordinator extends DurableObject<Env> {
     } else if (req.headSha !== c.head_sha) {
       throw new DomainError('STALE_APPROVAL', 'the reviewed head does not match this candidate');
     }
-    const id = newId('appr');
     this.db.tx(() => {
       this.db.run(
         `INSERT INTO approval (id, candidate_id, head_sha, expected_main_sha, validation_digest, policy_digest, harness_digest,
@@ -1897,4 +1900,16 @@ export class ProjectCoordinator extends DurableObject<Env> {
 
 function CHECK_REQUIRED(checkId: string, caps: Set<import('@converge/domain').Capability>): boolean {
   return applicableChecks(caps).some((c) => c.id === checkId);
+}
+
+/**
+ * Record ID derived from the command's idempotency scope and key, so a command
+ * that re-runs after a crash (before its receipt was stored) finds its own record.
+ */
+async function commandId(prefix: string, cmd: CommandEnvelope): Promise<string> {
+  const hex = (await digestOf({ actor: cmd.actor, type: cmd.type, key: cmd.idempotencyKey })).slice('sha256:'.length);
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
+  let out = '';
+  for (let i = 0; i < 26; i++) out += alphabet[parseInt(hex.slice(i * 2, i * 2 + 2), 16) % 32];
+  return `${prefix}_${out}`;
 }

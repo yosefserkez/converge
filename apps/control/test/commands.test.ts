@@ -52,6 +52,20 @@ describe('idempotent commands', () => {
   });
 });
 
+describe('crash between commit and receipt', () => {
+  it('a re-run of createSession with the same key returns the same session, not a conflict', async () => {
+    const stub = freshCoordinator('idem-crash');
+    await seedProject(stub);
+    const first = await command<{ sessionId: string }>(stub, 'createSession', { mode: 'fixture' }, { key: 'idem-crash-1' });
+    expect(first.status).toBe(201);
+    // Simulate a crash after the state commit and before the receipt write.
+    await sql(stub, 'DELETE FROM request_receipt');
+    const rerun = await command<{ sessionId: string }>(stub, 'createSession', { mode: 'fixture' }, { key: 'idem-crash-1' });
+    expect(rerun).toEqual(first);
+    expect(await stub.listSessions()).toHaveLength(1);
+  });
+});
+
 describe('seed', () => {
   it('creates the project, a seed job and an outbox row, then records the seeded head', async () => {
     const stub = freshCoordinator('seed');

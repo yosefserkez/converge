@@ -56,7 +56,7 @@ The session was cancelled (not promoted) so the live run could use the preset ba
 | Typecheck | `pnpm -r typecheck` | all 6 packages pass |
 | Lint | `pnpm lint` | pass |
 | Deployed smoke | `pnpm smoke --env dev --fixture-run` | 18/18 |
-| Coordinator in Workers runtime | `pnpm --filter @converge/control test:workers` | 11 passed (schema, idempotency, seed, fencing, budget, full orchestration to promotion, restart) |
+| Coordinator in Workers runtime | `pnpm --filter @converge/control test:workers` | 12 passed (schema, idempotency, seed, fencing, budget, full orchestration to promotion, restart) |
 | Security | `pnpm vitest run --project unit tests/faults` | 14 passed (Access JWT, CSRF, capabilities, redaction, config) |
 | Local pipeline integration | `pnpm vitest run --project integration` | 5 passed (real broker over bare repos + protected harness; failing pair, anchored repair, lease-guarded promotion, stale promotion refused) |
 | Browser (Playwright, agent-browser) | | not yet run |
@@ -68,7 +68,7 @@ None external. The account, Artifacts, Containers, Access, and the model key all
 ## Open items
 
 - An assemble call hung twice on the first candidate of a session and recovered by step retry. Broker calls now time out after 180 s and log one line each; the root cause is not yet known.
-- Command receipts are written after the command's transaction. A crash between the two can make a retried command run again (for example `createSession` then returns `ACTIVE_SESSION_EXISTS`).
+- Command receipts are written after the command's transaction. `createSession` and `approve` derive their record IDs from the idempotency key, so a re-run after a crash returns the same record (tested). Other commands are naturally idempotent or create only bounded extra rows (a second preview).
 - The live replay published before the readable-explanation fix shows proposal IDs in interaction explanations.
 
 ## Next steps
