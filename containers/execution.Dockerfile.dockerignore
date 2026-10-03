@@ -1,0 +1,7 @@
+# BuildKit reads this file for containers/execution.Dockerfile only.
+# Allowlist: the image needs only the fixture manifests and trusted helpers.
+*
+!fixtures/storefront/package.json
+!fixtures/storefront/package-lock.json
+!containers/execution/load-bundle.mjs
+!containers/execution/run-tool.mjs
