@@ -1,0 +1,42 @@
+.checkout-summary {
+  max-width: 24rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #c9c9c9;
+  border-radius: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-summary h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+}
+
+.checkout-summary__lines {
+  margin: 0;
+}
+
+.checkout-summary__line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
+.checkout-summary__line dt {
+  color: #444;
+}
+
+.checkout-summary__line dd {
+  margin: 0;
+}
+
+.checkout-summary__line--savings dd {
+  color: #1d6b32;
+}
+
+.checkout-summary__line--total {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #c9c9c9;
+  font-weight: 600;
+}

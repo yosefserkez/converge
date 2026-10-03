@@ -1,0 +1,31 @@
+{
+  "role": "caching",
+  "taskId": "task-caching",
+  "summary": "Caches unit prices in an in-memory Map keyed by productId. Quantity stays outside the cache, so totals are always recomputed.",
+  "files": {
+    "src/pricing/quote-cache.ts": "files/src/pricing/quote-cache.ts",
+    "tests/quote-cache.test.ts": "files/tests/quote-cache.test.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Cache unit-price computations so repeated equivalent quotes do not recompute the unit price.",
+    "reads": ["module:pricing.quote-cache", "contract:unit-price.dimensions"],
+    "writes": ["module:pricing.quote-cache"],
+    "affectedPaths": ["src/pricing/quote-cache.ts", "tests/quote-cache.test.ts"],
+    "assumptions": [
+      {
+        "key": "unit-price.dimensions",
+        "operator": "subset_of",
+        "expected": ["productId"],
+        "rationale": "The cache key varies only by product."
+      }
+    ],
+    "contractChanges": [],
+    "preservedInvariants": [
+      "Pricing behavior is unchanged for every supported input.",
+      "totalCents = unitPriceCents * quantity for every request."
+    ],
+    "proposedCheckIds": ["quote.contract", "pricing.tiers", "pricing.isolation", "quote.quantity", "cache.reuse"],
+    "dependencyRevisionIds": []
+  }
+}

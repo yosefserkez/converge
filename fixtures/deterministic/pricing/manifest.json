@@ -1,0 +1,45 @@
+{
+  "role": "pricing",
+  "taskId": "task-pricing",
+  "summary": "Members get 20% off list price in integer cents. Regular customers keep list price. The unit price now depends on productId and membershipTier.",
+  "files": {
+    "src/pricing/compute-unit-price.ts": "files/src/pricing/compute-unit-price.ts",
+    "tests/pricing.test.ts": "files/tests/pricing.test.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Add a 20% member discount computed from the server-side customer membershipTier, without changing nonmember prices.",
+    "reads": ["module:pricing.compute-unit-price", "module:products", "module:customer-fixtures"],
+    "writes": ["module:pricing.compute-unit-price"],
+    "affectedPaths": ["src/pricing/compute-unit-price.ts", "tests/pricing.test.ts"],
+    "assumptions": [
+      {
+        "key": "unit-price.currency",
+        "operator": "eq",
+        "expected": "USD",
+        "rationale": "Discount arithmetic is in integer USD cents."
+      }
+    ],
+    "contractChanges": [
+      {
+        "key": "unit-price.dimensions",
+        "before": ["productId"],
+        "after": ["productId", "membershipTier"],
+        "explanation": "The unit price now varies by customer membershipTier as well as product."
+      },
+      {
+        "key": "membership.discount-percent",
+        "before": 0,
+        "after": 20,
+        "explanation": "Customers with membershipTier member receive 20% off list price."
+      }
+    ],
+    "preservedInvariants": [
+      "Regular customers pay list price.",
+      "Prices are integer cents.",
+      "The quote response schema is unchanged."
+    ],
+    "proposedCheckIds": ["quote.contract", "pricing.tiers", "pricing.isolation", "quote.quantity"],
+    "dependencyRevisionIds": []
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "role": "checkout",
+  "taskId": "task-checkout",
+  "summary": "Checkout summary shows list price, member savings when present, unit price, quantity, and total in a labelled definition list. All amounts come from the server quote.",
+  "files": {
+    "src/ui/CheckoutSummary.tsx": "files/src/ui/CheckoutSummary.tsx",
+    "src/ui/checkout.css": "files/src/ui/checkout.css",
+    "tests/checkout.test.tsx": "files/tests/checkout.test.tsx"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Improve the checkout price breakdown from the existing quote response, accessibly and with integer-cent formatting.",
+    "reads": ["contract:quote.response-version", "module:quote-contract"],
+    "writes": ["module:ui.checkout-summary"],
+    "affectedPaths": ["src/ui/CheckoutSummary.tsx", "src/ui/checkout.css", "tests/checkout.test.tsx"],
+    "assumptions": [
+      {
+        "key": "quote.response-version",
+        "operator": "eq",
+        "expected": 1,
+        "rationale": "The summary reads listPriceCents, unitPriceCents, savingsCents, quantity, and totalCents from quote response version 1."
+      },
+      {
+        "key": "unit-price.currency",
+        "operator": "eq",
+        "expected": "USD",
+        "rationale": "Amounts are formatted as US dollars from integer cents."
+      }
+    ],
+    "contractChanges": [],
+    "preservedInvariants": [
+      "The UI does not compute eligibility or discounts.",
+      "Loading and error states stay accessible.",
+      "The quote response schema is unchanged."
+    ],
+    "proposedCheckIds": ["quote.contract", "checkout.summary"],
+    "dependencyRevisionIds": []
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "role": "repair",
+  "taskId": "task-repair",
+  "summary": "The unit-price cache key now includes productId and membershipTier, so a member's discounted price is never served to a regular customer. The cache stays active.",
+  "files": {
+    "src/pricing/quote-cache.ts": "files/src/pricing/quote-cache.ts",
+    "tests/quote-cache.test.ts": "files/tests/quote-cache.test.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Repair the customer-isolation failure: key the unit-price cache by every price-affecting dimension while keeping the cache active.",
+    "reads": ["module:pricing.quote-cache", "contract:unit-price.dimensions"],
+    "writes": ["module:pricing.quote-cache"],
+    "affectedPaths": ["src/pricing/quote-cache.ts", "tests/quote-cache.test.ts"],
+    "assumptions": [
+      {
+        "key": "unit-price.dimensions",
+        "operator": "subset_of",
+        "expected": ["productId", "membershipTier"],
+        "rationale": "Member pricing made the unit price depend on membershipTier, so the cache key includes product and membership tier."
+      }
+    ],
+    "contractChanges": [],
+    "preservedInvariants": [
+      "Repeated equivalent quotes reuse the cached unit price.",
+      "Pricing behavior is unchanged for every supported input.",
+      "totalCents = unitPriceCents * quantity for every request."
+    ],
+    "proposedCheckIds": ["quote.contract", "pricing.tiers", "pricing.isolation", "quote.quantity", "cache.reuse", "checkout.summary"],
+    "dependencyRevisionIds": []
+  }
+}
