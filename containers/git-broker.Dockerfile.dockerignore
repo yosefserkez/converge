@@ -1,0 +1,5 @@
+# Context allowlist for containers/git-broker.Dockerfile (BuildKit per-Dockerfile ignore).
+*
+!packages/domain/src/**
+!packages/infrastructure/src/git/**
+!containers/git-broker/**
