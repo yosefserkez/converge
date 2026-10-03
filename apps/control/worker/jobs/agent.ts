@@ -111,7 +111,7 @@ export async function sealRevision(
           files: edits,
           editablePaths: proposal.task.editablePaths,
           protectedPaths: [...new Set([...proposal.task.forbiddenPaths, ...PROTECTED_PATHS])],
-          message: `${proposal.task.title}: ${summary.split('\n')[0]!.slice(0, 160)}`,
+          message: `${proposal.task.title}: ${commitSubject(summary)}`,
           timestamp: Math.floor(startedAt / 1000),
           sourceRemote: source.remote,
           sourceToken: source.token,
@@ -143,4 +143,14 @@ export async function sealRevision(
       summary,
     });
   });
+}
+
+/** First plain sentence of an agent summary, without Markdown markers, for a commit subject. */
+export function commitSubject(summary: string): string {
+  const line =
+    summary
+      .split('\n')
+      .map((l) => l.replace(/^[#>*\-\s]+/, '').replace(/[*_`]/g, '').trim())
+      .find((l) => l.length > 0 && !/^(implementation |repair )?summary:?$/i.test(l) && !/^(objective|implemented behavior)( (achieved|completed))?:?$/i.test(l)) ?? 'sealed revision';
+  return line.slice(0, 120);
 }
