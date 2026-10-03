@@ -36,7 +36,7 @@ import {
   type BaselineFacts,
   type CheckStatus,
 } from '@converge/domain';
-import { harnessDigest } from '@converge/verification';
+import { harnessDigest, resultInvariantViolations } from '@converge/verification';
 import { loadConfig } from '../config.ts';
 import { Db, json, migrate, parse } from './db.ts';
 import type { CandidateRow, CheckRunRow, ProjectPolicy, ProjectRow, ProposalRow, RevisionRow, SessionPolicy, SessionRow } from './model.ts';
@@ -137,7 +137,8 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const decision = decideReceipt(prior ? { requestDigest: prior.request_digest } : null, cmd.requestDigest);
     if (decision === 'replay' && prior) return { status: prior.status_code, body: parse<Json>(prior.response_json) };
     if (decision === 'mismatch') {
-      throw new DomainError('IDEMPOTENCY_MISMATCH', 'this Idempotency-Key was already used with a different request body');
+      const err = new DomainError('IDEMPOTENCY_MISMATCH', 'this Idempotency-Key was already used with a different request body');
+      return { status: err.status, body: toEnvelope(err, '') as unknown as Json };
     }
     let result: CommandResult;
     try {
@@ -1372,6 +1373,13 @@ export class ProjectCoordinator extends DurableObject<Env> {
       throw new DomainError('INVALID_INPUT', 'check result was produced by a different harness');
     }
     const required = CHECK_REQUIRED(result.checkId, candidateCapabilities(this.db, c.id));
+    // Reject an inconsistent result here. INSERT OR IGNORE below would drop it without a trace,
+    // and a skip of a check that applies must never count as a pass.
+    const problems = resultInvariantViolations(result);
+    if (result.applicable !== required) problems.push(`applicability differs from the frozen policy (policy: ${required ? 'applies' : 'excluded'})`);
+    if (problems.length > 0) {
+      throw new DomainError('INVALID_INPUT', 'check result is not consistent', { checkId: result.checkId, problems });
+    }
     const now = Date.now();
     this.db.tx(() => {
       assertFence(this.db, { jobId, fence, leaseMs: this.leaseMs });
@@ -1407,8 +1415,12 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const runs = latestRuns(this.db, c.id);
     const applicable = applicableChecks(caps);
     const anyBad = runs.some((r) => r.applicable === 1 && (r.status === 'failed' || r.status === 'error'));
-    const missing = applicable.some((chk) => !runs.find((r) => r.check_key === chk.id));
-    const to = buildError || anyBad || missing ? 'failed' : 'passed';
+    // Every check the policy applies needs an applicable, passed run. A skip or a missing run is not a pass.
+    const unmet = applicable.some((chk) => {
+      const run = runs.find((r) => r.check_key === chk.id);
+      return !run || run.applicable !== 1 || run.status !== 'passed';
+    });
+    const to = buildError || anyBad || unmet ? 'failed' : 'passed';
     let validation: { manifest: ValidationManifest; digest: string; ref: EvidenceRef } | null = null;
     if (to === 'passed' && isFullGoal(caps)) {
       const built = buildValidationManifest({

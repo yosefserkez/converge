@@ -1,0 +1,43 @@
+// Wrangler config for the Workers Vitest pool only. Do not deploy it.
+// It has no containers and no Artifacts binding: the tests simulate those effects.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "converge-test",
+  "main": "worker/test-entry.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "PROJECTS", "class_name": "ProjectCoordinator" }]
+  },
+  "exports": {
+    "ProjectCoordinator": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "workflows": [{ "binding": "JOBS", "name": "converge-jobs-test", "class_name": "JobWorkflow" }],
+  "r2_buckets": [{ "binding": "EVIDENCE", "bucket_name": "converge-evidence-test" }],
+  "vars": {
+    "ENVIRONMENT": "local",
+    "PROJECT_SLUG": "storefront",
+    "AUTH_MODE": "local",
+    "ACCESS_ISSUER": "",
+    "ACCESS_AUD": "",
+    "OPERATOR_SUBJECTS": "local-operator",
+    "MODEL_PROVIDER": "anthropic",
+    "MODEL_ID": "claude-haiku-4-5",
+    "MODEL_PRICE_SNAPSHOT": "{\"provider\":\"anthropic\",\"modelId\":\"claude-haiku-4-5\",\"inputMicroUsdPerMTok\":1000000,\"outputMicroUsdPerMTok\":5000000,\"cacheReadMicroUsdPerMTok\":100000,\"cacheWriteMicroUsdPerMTok\":1250000,\"capturedAt\":1790294400000}",
+    "LIVE_EXECUTION_ENABLED": "false",
+    "DEFAULT_MODEL_BUDGET_MICROUSD": "5000000",
+    "MAX_CONCURRENT_AGENTS": "3",
+    "MAX_ACTIVE_CONTAINERS": "6",
+    "MAX_CANDIDATES_PER_SESSION": "8",
+    "MAX_REPAIR_ATTEMPTS": "2",
+    "MAX_AGENT_TURNS": "30",
+    "AGENT_DEADLINE_SECONDS": "720",
+    "TOOL_TIMEOUT_SECONDS": "120",
+    "LEASE_SECONDS": "180",
+    "PREVIEW_TTL_SECONDS": "300",
+    "CONTROL_ORIGIN": "http://localhost:5173",
+    "PREVIEW_ORIGIN": "http://localhost:8790",
+    "BUILD_ID": "test",
+    "REPO_HOST": "artifacts"
+  }
+}
