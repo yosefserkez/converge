@@ -2,7 +2,8 @@
 //   pnpm deploy:dev | pnpm deploy:prod
 // Order: control Worker (and its container images), secrets, then the preview gateway.
 // Refuses local auth, missing Access settings, and missing secrets.
-import { rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ENVIRONMENTS, ROOT, fail, loadEnvLocal, parseArgs, readJsonc, requireEnv, run, step } from './lib.ts';
 
@@ -40,13 +41,17 @@ run('pnpm', ['exec', 'vite', 'build'], { cwd: controlDir, env: buildEnv });
 // vite build copies local .dev.vars next to the output for `vite preview`; it is never deployed, so remove it.
 rmSync(join(controlDir, 'dist', names.control.replace(/-/g, '_'), '.dev.vars'), { force: true });
 
-step('Deploy control Worker (builds and pushes container images)');
-run('pnpm', ['exec', 'wrangler', 'deploy', '--var', `BUILD_ID:${buildId}`], { cwd: controlDir });
-
-step('Upload control secrets');
-const secrets: Record<string, string> = { PREVIEW_SIGNING_KEY: signingKey };
-if (anthropicKey) secrets.ANTHROPIC_API_KEY = anthropicKey;
-run('pnpm', ['exec', 'wrangler', 'secret', 'bulk'], { cwd: controlDir, input: JSON.stringify(secrets) });
+step('Deploy control Worker with secrets (builds and pushes container images)');
+const secrets: Record<string, string> = { PREVIEW_SIGNING_KEY: signingKey, ANTHROPIC_API_KEY: anthropicKey };
+// The secrets file lives in a private temp dir (mode 600) and is removed right after the deploy.
+const secretDir = mkdtempSync(join(tmpdir(), 'converge-secrets-'));
+const secretFile = join(secretDir, 'secrets.json');
+try {
+  writeFileSync(secretFile, JSON.stringify(secrets), { mode: 0o600 });
+  run('pnpm', ['exec', 'wrangler', 'deploy', '--var', `BUILD_ID:${buildId}`, '--secrets-file', secretFile], { cwd: controlDir });
+} finally {
+  rmSync(secretDir, { recursive: true, force: true });
+}
 
 step('Build and deploy preview gateway');
 run('pnpm', ['exec', 'vite', 'build'], { cwd: previewDir, env: buildEnv });
