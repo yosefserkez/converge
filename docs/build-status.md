@@ -12,6 +12,16 @@ Last update: 2026-10-03. This file records completed work, actual test outcomes,
 | Public replay (fixture run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_x6sgkwykc5ujbdgib32rjco54u |
 | Public replay (live run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_suwonabsqmruq2gq6pvnctj2vq |
 
+## Deployed (prod)
+
+| Item | Value |
+|---|---|
+| Operator host (Access-protected) | https://converge.converge-42.workers.dev |
+| Preview and replay host | https://converge-preview.converge-42.workers.dev |
+| Canonical repository | `cv-storefront-b-main` in namespace `converge`, main `da9b779` (baseline) |
+| Smoke | `pnpm smoke --env prod --fixture-run`: 18/18 (build `3f98cf3`) |
+| Demo-ready session | `ses_qgjsnsuhtkhp6jjhysa42gsjpu` in `ready`; promotable candidate `77106112a3d3c95cf38da06fa9002faa1ddbdfcc` (left unpromoted for the recording) |
+
 ## Phase gates
 
 | Phase | State | Evidence |
@@ -48,6 +58,7 @@ The session was cancelled (not promoted) so the live run could use the preset ba
 | Deployed smoke | `pnpm smoke --env dev --fixture-run` | 18/18 |
 | Coordinator in Workers runtime | `pnpm --filter @converge/control test:workers` | 11 passed (schema, idempotency, seed, fencing, budget, full orchestration to promotion, restart) |
 | Security | `pnpm vitest run --project unit tests/faults` | 14 passed (Access JWT, CSRF, capabilities, redaction, config) |
+| Local pipeline integration | `pnpm vitest run --project integration` | 5 passed (real broker over bare repos + protected harness; failing pair, anchored repair, lease-guarded promotion, stale promotion refused) |
 | Browser (Playwright, agent-browser) | | not yet run |
 
 ## Blockers
@@ -63,6 +74,5 @@ None external. The account, Artifacts, Containers, Access, and the model key all
 ## Next steps
 
 1. Merge the UI; run browser checks at desktop and mobile widths against dev.
-2. Provision and deploy production; seed; smoke.
 3. Fresh demo project for the video recording (main has moved).
 4. Publish the source repository (needs your approval of host and visibility); record the video.
