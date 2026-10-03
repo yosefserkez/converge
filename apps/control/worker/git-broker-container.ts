@@ -85,6 +85,7 @@ export class GitBrokerContainer extends DurableObject<Env> {
   }
 
   private async op<N extends BrokerOpName>(name: N, input: BrokerOpInput<N>): Promise<BrokerOpOutput<N>> {
+    const started = Date.now();
     const secret = await this.ensureReady();
     // Bound every operation: a lost or hung request fails fast and the workflow step retries.
     const abort = new AbortController();
@@ -100,10 +101,13 @@ export class GitBrokerContainer extends DurableObject<Env> {
       body = BrokerResponse.parse(await res.json());
     } catch (err) {
       this.ready = null;
+      console.log(JSON.stringify({ broker: name, ms: Date.now() - started, ok: false, code: 'NO_ANSWER' }));
       throw new DomainError('DEPENDENCY_UNAVAILABLE', `broker ${name} did not answer: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       clearTimeout(timer);
     }
+    // One log line per operation (no inputs, no credentials) so slow or failed calls show in `wrangler tail`.
+    console.log(JSON.stringify({ broker: name, ms: Date.now() - started, ok: body.ok, code: body.ok ? null : body.error.code }));
     if (!body.ok) throw new DomainError(asCode(body.error.code), `broker ${name}: ${body.error.message}`);
     return brokerOps[name].output.parse(body.result) as BrokerOpOutput<N>;
   }
