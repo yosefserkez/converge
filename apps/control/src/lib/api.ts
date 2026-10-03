@@ -63,7 +63,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError({ status: 401, code: 'SIGN_IN_REQUIRED', message: 'Your sign-in expired. Reload the page to sign in again.', retryable: false });
   }
   const text = await res.text();
-  let body: unknown = null;
+  let body: unknown;
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
