@@ -15,6 +15,7 @@
     "@base-ui/react": "1.8.0",
     "@converge/domain": "workspace:*",
     "@converge/infrastructure": "workspace:*",
+    "@converge/ui": "workspace:*",
     "@converge/verification": "workspace:*",
     "@tanstack/react-query": "5.104.1",
     "ai": "7.0.127",
