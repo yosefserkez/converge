@@ -34,7 +34,10 @@ function SampleBanner({ variant, variants }: { variant: string; variants: readon
 export function App({ sample }: { sample: { variant: string; variants: readonly string[] } | null }) {
   const route = useRoute();
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => setMenuOpen(false), [route]);
+  // Close the phone menu when the page changes. useRoute returns a new object on
+  // every render, so depend on a stable key; depending on the object closed the menu at once.
+  const routeKey = route.name === 'session' ? `session:${route.sessionId}` : route.name;
+  useEffect(() => setMenuOpen(false), [routeKey]);
 
   return (
     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>

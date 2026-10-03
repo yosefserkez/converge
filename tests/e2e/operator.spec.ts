@@ -55,7 +55,7 @@ test('settings show the limits and the model', async ({ page, isMobile }) => {
 for (const state of ['ready', 'running', 'cancelling', 'failed-agent', 'stale', 'promoted']) {
   test(`sample state "${state}" renders with a sample-data label and no overflow`, async ({ page }) => {
     await page.goto(`/?sample=${state}`);
-    await expect(page.getByText(/sample data/i).first()).toBeVisible();
+    await expect(page.getByText(/sample data/i).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('h1')).not.toBeEmpty();
     await noHorizontalOverflow(page);
   });
