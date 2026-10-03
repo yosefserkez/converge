@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { freshCoordinator, lease, agentJobFor, snapshot, sql, startedSession, type Coordinator } from './helpers.ts';
+import { freshCoordinator, lease, agentJobFor, ok, snapshot, sql, startedSession, type Coordinator } from './helpers.ts';
 
 const CEILING = 1_000_000;
 
@@ -90,5 +90,24 @@ describe('model budget ledger', () => {
       running.uncertain += r.uncertain_delta_microusd;
       expectNonNegative(running);
     }
+  });
+});
+
+describe('cancellation and the ledger', () => {
+  it('books a reservation that is in flight at cancel time as uncertain, never as free', async () => {
+    const stub = freshCoordinator('budget-cancel');
+    const { sessionId } = await startedSession(stub);
+    await sql(stub, 'UPDATE session SET model_budget_microusd = ? WHERE id = ?', CEILING, sessionId);
+    const { job } = await agentJobFor(stub, 'pricing');
+    const l = await lease(stub, job.id);
+    expect((await stub.wfBudgetReserve(l.jobId, l.fence, 'in-flight', 250_000)).ok).toBe(true);
+
+    await ok(stub, 'cancelSession', { sessionId });
+    const b = await ledgerOf(stub, sessionId);
+    expect(b).toEqual({ reserved: 0, spent: 0, uncertain: 250_000, total: 250_000 });
+
+    // A late settle from the terminated attempt does not change the booked outcome.
+    await stub.wfBudgetSettle(l.jobId, 'in-flight', { kind: 'released' });
+    expect(await ledgerOf(stub, sessionId)).toEqual(b);
   });
 });

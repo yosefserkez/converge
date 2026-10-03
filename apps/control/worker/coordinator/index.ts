@@ -449,6 +449,16 @@ export class ProjectCoordinator extends DurableObject<Env> {
       )) {
         setCandidateState(this.db, c, 'cancelled', now);
       }
+      // A model request in flight at cancel time has an unknown outcome: book it as uncertain, never as free.
+      for (const r of this.db.all<{ operation_key: string; job_id: string; reserved_delta_microusd: number }>(
+        `SELECT b.operation_key, b.job_id, b.reserved_delta_microusd FROM budget_entry b
+         WHERE b.session_id = ? AND b.kind = 'reserve'
+           AND NOT EXISTS (SELECT 1 FROM budget_entry s WHERE s.operation_key = 'settle:' || substr(b.operation_key, 9))`,
+        sessionId,
+      )) {
+        const reservationId = r.operation_key.replace(/^reserve:/, '');
+        this.insertLedger(sessionId, r.job_id, `settle:${reservationId}`, uncertainEntry({ reservationId, amountMicroUsd: r.reserved_delta_microusd }), { outcome: 'uncertain', reason: 'cancelled while in flight' }, now);
+      }
       setSessionStatus(this.db, session, 'cancelled', `cancelled by ${actor}`, now);
       appendEvent(this.db, {
         sessionId,
