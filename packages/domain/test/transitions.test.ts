@@ -136,3 +136,11 @@ describe('retryJob', () => {
     expect(() => retryJob({ status: 'running', attemptNo: 1, fence: 7 })).toThrow(/cannot move/);
   });
 });
+
+describe('session resume after a human retry', () => {
+  it('needs_attention can resume into the phase that still has work', () => {
+    for (const to of ['running', 'validating', 'repairing'] as const) expect(canTransition('session', 'needs_attention', to)).toBe(true);
+    expect(canTransition('session', 'needs_attention', 'ready')).toBe(false);
+    expect(canTransition('session', 'needs_attention', 'promoted')).toBe(false);
+  });
+});

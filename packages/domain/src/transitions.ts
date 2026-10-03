@@ -26,7 +26,8 @@ const SESSION: Table<SessionStatus> = {
   repairing: ['validating', ...SESSION_EXITS],
   ready: ['promoted', ...SESSION_EXITS],
   // Parked for a human; can only be closed out.
-  needs_attention: ['failed', 'cancelled'],
+  // A human retry resumes the session in the phase that still has work.
+  needs_attention: ['running', 'validating', 'repairing', 'failed', 'cancelled'],
   promoted: [],
   failed: [],
   cancelled: [],

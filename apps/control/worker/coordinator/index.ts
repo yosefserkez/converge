@@ -481,7 +481,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
       }
       if (job.session_id) {
         const s = getSession(this.db, job.session_id);
-        if (s.status === 'needs_attention') setSessionStatus(this.db, s, s.mode === 'live' ? 'running' : 'running', 'retry requested', now);
+        if (s.status === 'needs_attention') setSessionStatus(this.db, s, this.resumeStatus(s.id), 'retry requested', now);
       }
       appendEvent(this.db, {
         sessionId: job.session_id,
@@ -1696,6 +1696,20 @@ export class ProjectCoordinator extends DurableObject<Env> {
       plans.forEach((plan, i) => insertCandidate(this.db, session, plan, keys[i]!, integrationRepo, now));
       setSessionStatus(this.db, session, to, reason, now);
     });
+  }
+
+  /** The phase a session resumes in after a human retry. */
+  private resumeStatus(sessionId: string): 'running' | 'validating' | 'repairing' {
+    const unsealedFeature = this.db.value<number>(
+      "SELECT count(*) FROM proposal WHERE session_id = ? AND kind = 'feature' AND status <> 'sealed'",
+      sessionId,
+    );
+    if (unsealedFeature) return 'running';
+    const openRepair = this.db.value<number>(
+      "SELECT count(*) FROM proposal WHERE session_id = ? AND kind = 'repair' AND status <> 'sealed'",
+      sessionId,
+    );
+    return openRepair ? 'repairing' : 'validating';
   }
 
   private candidateRow(id: string): CandidateRow {
