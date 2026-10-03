@@ -31,7 +31,7 @@ Last update: 2026-10-03. This file records completed work, actual test outcomes,
 | 2. Deterministic end-to-end loop | Done on deployed infra | `pnpm smoke --env dev --fixture-run`: 18/18 (`docs/runs/2026-10-03-dev-fixture-smoke.log`) |
 | 3. Live agents | Done | Live run `ses_spukrzguxi3dnyna2gs3vzeg5u` (Haiku 4.5): three agents overlapped (113 s with 2+ busy, 17 s with all 3); predicted interactions from real intents; real counterexample; live repair; `docs/runs/2026-10-03-dev-live-run.md` |
 | 4. Review and promotion | Done | Approved and promoted `a663afc`; `git clone` shows main equals the approved commit, with the failed anchor `5f6b438` as an ancestor |
-| 5. Interface and isolated demonstration | In progress | UI being built. Verified on dev: preview of `a663afc` built and served through the gateway (CSP, no-referrer; member 8000 then regular 10000 in one process); diagnostics 404, PUT 405, injected price field 422, tampered capability 403; public replays served anonymously |
+| 5. Interface and isolated demonstration | Done | UI being built. Verified on dev: preview of `a663afc` built and served through the gateway (CSP, no-referrer; member 8000 then regular 10000 in one process); diagnostics 404, PUT 405, injected price field 422, tampered capability 403; public replays served anonymously |
 | 6. Hardening and handoff | Not started | |
 
 ## Deployed fixture run (session `ses_jlxedxge73v2zho4h64wudjodm`, fixture agents, no model calls)
@@ -59,7 +59,8 @@ The session was cancelled (not promoted) so the live run could use the preset ba
 | Coordinator in Workers runtime | `pnpm --filter @converge/control test:workers` | 12 passed (schema, idempotency, seed, fencing, budget, full orchestration to promotion, restart) |
 | Security | `pnpm vitest run --project unit tests/faults` | 14 passed (Access JWT, CSRF, capabilities, redaction, config) |
 | Local pipeline integration | `pnpm vitest run --project integration` | 5 passed (real broker over bare repos + protected harness; failing pair, anchored repair, lease-guarded promotion, stale promotion refused) |
-| Browser (Playwright, agent-browser) | | not yet run |
+| Browser (Playwright, deployed dev) | `pnpm test:e2e` | 27 passed, 3 skipped (opt-in full flow, keyboard on mobile). Found and fixed: phone menu closed at once, skip link did not move focus, long contract values overflowed the replay, preview iframe blank (sandbox origin and 64 KiB asset cut-off) |
+| Browser (agent-browser, deployed dev) | manual | Full operator flow in the UI: create, start, review, approve, promote, preview, publish replay |
 
 ## Blockers
 
