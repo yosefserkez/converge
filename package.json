@@ -33,6 +33,9 @@
     "@playwright/test": "1.63.0",
     "esbuild": "0.28.2",
     "wrangler": "4.147.0",
-    "jose": "6.2.12"
+    "jose": "6.2.12",
+    "@converge/domain": "workspace:*",
+    "@converge/infrastructure": "workspace:*",
+    "@converge/verification": "workspace:*"
   }
 }

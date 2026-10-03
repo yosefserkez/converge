@@ -8,6 +8,15 @@ importers:
 
   .:
     devDependencies:
+      '@converge/domain':
+        specifier: workspace:*
+        version: link:packages/domain
+      '@converge/infrastructure':
+        specifier: workspace:*
+        version: link:packages/infrastructure
+      '@converge/verification':
+        specifier: workspace:*
+        version: link:packages/verification
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.12.0(jiti@2.7.0))
