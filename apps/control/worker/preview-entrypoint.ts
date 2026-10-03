@@ -12,13 +12,20 @@ import { ArtifactsRepoHost } from './artifacts.ts';
  * a preview the operator did not allocate.
  */
 export class PreviewEntrypoint extends WorkerEntrypoint<Env> {
+  /**
+   * Published replays are immutable, content-addressed R2 objects
+   * (`public/replays/<id>/<sha256>.json`). Resolve them from R2 directly so a
+   * replay stays readable after the operator switches to a fresh demo project.
+   */
   async getReplay(replayId: string): Promise<{ ok: true; json: string; mode: string } | { ok: false }> {
     if (!/^rpl_[a-z0-9]{26}$/.test(replayId)) return { ok: false };
-    const config = loadConfig(this.env);
-    const row = await this.env.PROJECTS.getByName(config.PROJECT_SLUG).getPublishedReplay(replayId);
-    if (!row || !row.snapshot_key.startsWith('public/replays/')) return { ok: false };
-    const json = await readVerifiedText(this.env.EVIDENCE, row.snapshot_key, row.snapshot_digest);
-    return { ok: true, json, mode: row.original_mode };
+    const listed = await this.env.EVIDENCE.list({ prefix: `public/replays/${replayId}/`, limit: 2 });
+    const obj = listed.objects.find((o) => /\/[0-9a-f]{64}\.json$/.test(o.key));
+    if (!obj || listed.objects.length !== 1) return { ok: false };
+    const digest = `sha256:${obj.key.slice(-69, -5)}`;
+    const json = await readVerifiedText(this.env.EVIDENCE, obj.key, digest);
+    const mode = (JSON.parse(json) as { originalMode?: string }).originalMode ?? 'unknown';
+    return { ok: true, json, mode };
   }
 
   /**
