@@ -201,8 +201,16 @@ async function runTurn(ctx: JobContext, input: AgentInput, task: TaskSpec, state
   let next: AgentState = { ...state };
   const files = new Map(bundle.files.map((f) => [f.path, f.utf8]));
   const toolResults: ToolResultPart[] = [];
-  const calls = result.toolCalls.slice(0, MAX_TOOL_CALLS_PER_TURN);
-  for (const call of result.toolCalls.slice(MAX_TOOL_CALLS_PER_TURN)) {
+  // The SDK answers invalid tool calls itself (a tool-error result in the response
+  // messages). Each tool call must have exactly one result, so skip those.
+  const answered = new Set(
+    result.responseMessages.flatMap((m) =>
+      m.role === 'tool' ? m.content.flatMap((part) => (part.type === 'tool-result' ? [part.toolCallId] : [])) : [],
+    ),
+  );
+  const pending = result.toolCalls.filter((call) => !answered.has(call.toolCallId));
+  const calls = pending.slice(0, MAX_TOOL_CALLS_PER_TURN);
+  for (const call of pending.slice(MAX_TOOL_CALLS_PER_TURN)) {
     toolResults.push(errorResult(call.toolCallId, call.toolName, `tool call limit (${MAX_TOOL_CALLS_PER_TURN}) per turn exceeded; call again next turn`));
   }
   // Mutating tools are serialized: calls run one at a time in model order.
@@ -213,6 +221,7 @@ async function runTurn(ctx: JobContext, input: AgentInput, task: TaskSpec, state
     let output: unknown;
     let isError = false;
     try {
+      if ('invalid' in call && call.invalid) throw new Error(`invalid input for ${call.toolName}; check the tool schema and call again`);
       output = await executeTool(ctx, input, task, call.toolName as ToolName, call.input as Record<string, unknown>, files, next, (s) => (next = s));
     } catch (err) {
       isError = true;
