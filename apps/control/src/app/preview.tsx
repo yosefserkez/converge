@@ -90,7 +90,10 @@ export function PreviewSheet({ grant, onClose, onRenew }: { grant: PreviewGrant 
                     key={grant.url}
                     src={grant.url}
                     title={`Preview of ${grant.label}`}
-                    sandbox="allow-scripts allow-forms"
+                    // allow-same-origin gives the page its own preview origin (not this one), which module
+                    // scripts and same-host API calls need. It is safe only because the preview host is a
+                    // separate origin: the page still cannot read this page, navigate it, or open windows.
+                    sandbox="allow-scripts allow-forms allow-same-origin"
                     referrerPolicy="no-referrer"
                     className="h-[70vh] w-full rounded-md border bg-white"
                   />
