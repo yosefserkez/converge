@@ -33,7 +33,8 @@ const PREVIEW_CSP = [
   "worker-src 'none'",
 ].join('; ');
 
-const ALLOWED_RESPONSE_HEADERS = new Set(['content-type', 'content-length']);
+// content-length is recomputed by the runtime; never pass a candidate's value through.
+const ALLOWED_RESPONSE_HEADERS = new Set(['content-type']);
 const MAX_PREVIEW_BODY = 4 * 1024;
 
 app.get('/healthz', (c) => c.json({ ok: true }));

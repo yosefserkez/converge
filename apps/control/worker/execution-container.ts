@@ -108,7 +108,8 @@ export class ExecutionContainer extends DurableObject<Env> {
     }
   }
 
-  async appRequest(req: AppHttpRequest): Promise<AppHttpResponse> {
+  /** Harness requests use the default 64 KiB bound; previews pass a larger one for assets. */
+  async appRequest(req: AppHttpRequest, maxBytes = MAX_RESPONSE_BYTES): Promise<AppHttpResponse> {
     if (!req.path.startsWith('/') || req.path.startsWith('//')) throw new DomainError('INVALID_INPUT', 'invalid app path');
     const res = await this.container.getTcpPort(APP_PORT).fetch(`http://app${req.path}`, {
       method: req.method,
@@ -116,7 +117,7 @@ export class ExecutionContainer extends DurableObject<Env> {
       ...(req.body !== undefined ? { body: req.body } : {}),
       redirect: 'manual',
     });
-    const { text, truncated } = await readBounded(res.body, MAX_RESPONSE_BYTES);
+    const { text, truncated } = await readBounded(res.body, maxBytes);
     return { status: res.status, headers: Object.fromEntries(res.headers), bodyText: text, truncated };
   }
 

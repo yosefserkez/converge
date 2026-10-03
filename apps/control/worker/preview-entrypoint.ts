@@ -11,6 +11,8 @@ import { ArtifactsRepoHost } from './artifacts.ts';
  * replays. It cannot create sessions, call models, approve, promote, or start
  * a preview the operator did not allocate.
  */
+const PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
+
 export class PreviewEntrypoint extends WorkerEntrypoint<Env> {
   /**
    * Published replays are immutable, content-addressed R2 objects
@@ -63,15 +65,20 @@ export class PreviewEntrypoint extends WorkerEntrypoint<Env> {
         return { status: 503, headers: {}, body: 'preview could not start' };
       }
     }
-    const res = await exec.appRequest({
-      method: method === 'POST' ? 'POST' : 'GET',
-      path: `${path}${query}`,
-      headers: {
-        ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
-        'x-demo-customer': customer === 'member-1' ? 'member-1' : 'regular-1',
+    const res = await exec.appRequest(
+      {
+        method: method === 'POST' ? 'POST' : 'GET',
+        path: `${path}${query}`,
+        headers: {
+          ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+          'x-demo-customer': customer === 'member-1' ? 'member-1' : 'regular-1',
+        },
+        ...(body !== null ? { body } : {}),
       },
-      ...(body !== null ? { body } : {}),
-    });
+      PREVIEW_MAX_BYTES,
+    );
+    // A cut-off asset would break the page silently; say so instead.
+    if (res.truncated) return { status: 502, headers: {}, body: 'preview response is larger than the preview limit' };
     return { status: res.status, headers: res.headers, body: res.bodyText };
   }
 
