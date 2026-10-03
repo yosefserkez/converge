@@ -1,0 +1,75 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "converge",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "converge" }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PROJECTS", "class_name": "ProjectCoordinator" },
+      { "name": "EXECUTION", "class_name": "ExecutionContainer" },
+      { "name": "GIT_BROKER", "class_name": "GitBrokerContainer" }
+    ]
+  },
+  "exports": {
+    "ProjectCoordinator": { "type": "durable-object", "storage": "sqlite" },
+    "ExecutionContainer": { "type": "durable-object", "storage": "sqlite" },
+    "GitBrokerContainer": { "type": "durable-object", "storage": "sqlite" },
+    "PreviewEntrypoint": { "type": "worker" }
+  },
+  "containers": [
+    {
+      "class_name": "ExecutionContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "workspace": { "dockerfile": "../../containers/execution.Dockerfile", "build_context": "../.." }
+      }
+    },
+    {
+      "class_name": "GitBrokerContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "broker": { "dockerfile": "../../containers/git-broker.Dockerfile", "build_context": "../.." }
+      }
+    }
+  ],
+  "workflows": [{ "binding": "JOBS", "name": "converge-jobs", "class_name": "JobWorkflow" }],
+  "r2_buckets": [{ "binding": "EVIDENCE", "bucket_name": "converge-evidence" }],
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/healthz"]
+  },
+  "triggers": { "crons": ["*/1 * * * *"] },
+  "observability": { "enabled": true },
+  "vars": {
+    "ENVIRONMENT": "prod",
+    "PROJECT_SLUG": "storefront",
+    "AUTH_MODE": "access",
+    "ACCESS_ISSUER": "https://twilight-math-0e95.cloudflareaccess.com",
+    "ACCESS_AUD": "",
+    "OPERATOR_SUBJECTS": "",
+    "MODEL_PROVIDER": "anthropic",
+    "MODEL_ID": "claude-haiku-4-5",
+    "MODEL_PRICE_SNAPSHOT": "{\"provider\":\"anthropic\",\"modelId\":\"claude-haiku-4-5\",\"inputMicroUsdPerMTok\":1000000,\"outputMicroUsdPerMTok\":5000000,\"cacheReadMicroUsdPerMTok\":100000,\"cacheWriteMicroUsdPerMTok\":1250000,\"capturedAt\":1790294400000}",
+    "LIVE_EXECUTION_ENABLED": "false",
+    "DEFAULT_MODEL_BUDGET_MICROUSD": "5000000",
+    "MAX_CONCURRENT_AGENTS": "3",
+    "MAX_ACTIVE_CONTAINERS": "6",
+    "MAX_CANDIDATES_PER_SESSION": "8",
+    "MAX_REPAIR_ATTEMPTS": "2",
+    "MAX_AGENT_TURNS": "30",
+    "AGENT_DEADLINE_SECONDS": "720",
+    "TOOL_TIMEOUT_SECONDS": "120",
+    "LEASE_SECONDS": "180",
+    "PREVIEW_TTL_SECONDS": "300",
+    "CONTROL_ORIGIN": "https://converge.invalid",
+    "PREVIEW_ORIGIN": "https://converge-preview.invalid",
+    "BUILD_ID": "local",
+    "REPO_HOST": "artifacts"
+  },
+  "secrets": { "required": ["ANTHROPIC_API_KEY", "PREVIEW_SIGNING_KEY"] }
+}
