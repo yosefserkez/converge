@@ -68,3 +68,6 @@ export async function digestOf(value: unknown): Promise<string> {
 export async function digestBytes(data: string | Uint8Array): Promise<string> {
   return `sha256:${await sha256Hex(data)}`;
 }
+
+/** Serializable JSON value; use in RPC and workflow step shapes instead of `unknown`. */
+export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };

@@ -32,18 +32,32 @@ export type ErrorCode = keyof typeof ErrorCode;
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set(['REPO_NOT_READY', 'DEPENDENCY_UNAVAILABLE', 'INTERNAL']);
 
 export class DomainError extends Error {
+  readonly code: ErrorCode;
   readonly status: number;
   readonly retryable: boolean;
-  constructor(
-    readonly code: ErrorCode,
-    message: string,
-    readonly details: Record<string, unknown> = {},
-  ) {
-    super(message);
+  readonly details: Record<string, unknown>;
+  /** Message without the code prefix. */
+  readonly detail: string;
+  constructor(code: ErrorCode, message: string, details: Record<string, unknown> = {}) {
+    // The code prefix lets a caller recover the code after Durable Object RPC,
+    // which keeps only the error message.
+    super(`${code}: ${message}`);
     this.name = 'DomainError';
+    this.code = code;
+    this.detail = message;
+    this.details = details;
     this.status = ErrorCode[code];
     this.retryable = RETRYABLE.has(code);
   }
+}
+
+/** Recover a DomainError from an error that crossed an RPC boundary. */
+export function asDomainError(err: unknown): DomainError | null {
+  if (err instanceof DomainError) return err;
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const match = /^(?:DomainError: )?([A-Z][A-Z_]+): ([\s\S]*)$/.exec(message);
+  if (match && Object.hasOwn(ErrorCode, match[1]!)) return new DomainError(match[1] as ErrorCode, match[2]!);
+  return null;
 }
 
 export interface ErrorEnvelope {
@@ -58,6 +72,6 @@ export interface ErrorEnvelope {
 
 export function toEnvelope(err: DomainError, requestId: string): ErrorEnvelope {
   return {
-    error: { code: err.code, message: err.message, retryable: err.retryable, requestId, details: err.details },
+    error: { code: err.code, message: err.detail, retryable: err.retryable, requestId, details: err.details },
   };
 }

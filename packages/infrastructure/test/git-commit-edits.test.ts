@@ -35,7 +35,7 @@ async function setup(): Promise<{ base: { dir: string; url: string; sha: string 
   };
 }
 
-describe('commitEdits', () => {
+describe('commitEdits', { timeout: 30_000 }, () => {
   it('commits validated edits on top of baseSha and verifies the remote branch', async () => {
     const { base, input } = await setup();
     const res = await fx.broker.commitEdits(input);

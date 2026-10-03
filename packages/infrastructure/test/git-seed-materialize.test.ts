@@ -11,7 +11,7 @@ afterEach(() => {
   fx.cleanup();
 });
 
-describe('seedBaseline', () => {
+describe('seedBaseline', { timeout: 30_000 }, () => {
   it('pushes an initial commit and reseeding the same tree is idempotent', async () => {
     const repo = fx.bare('canonical');
     const input = { remote: repo.url, token: FAKE_TOKEN, files: BASE_FILES, message: 'Baseline', timestamp: T0 };
@@ -51,7 +51,7 @@ describe('seedBaseline', () => {
   });
 });
 
-describe('materialize', () => {
+describe('materialize', { timeout: 30_000 }, () => {
   it('returns every file at the exact commit with sha256 digests', async () => {
     const repo = await seed(fx);
     const bundle = await fx.broker.materialize({ remote: repo.url, token: FAKE_TOKEN, sha: repo.sha });

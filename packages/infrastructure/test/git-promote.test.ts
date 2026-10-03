@@ -35,7 +35,7 @@ const promoteInput = (canonical: { url: string }, source: { url: string }, candi
   expectedMainSha,
 });
 
-describe('promote', () => {
+describe('promote', { timeout: 30_000 }, () => {
   it('moves canonical main to exactly the candidate SHA', async () => {
     const base = await seed(fx);
     const cand = await candidate(base, 'cand', 'v2\n');

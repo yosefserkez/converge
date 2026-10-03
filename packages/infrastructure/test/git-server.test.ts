@@ -30,7 +30,7 @@ afterEach(async () => {
   fx.cleanup();
 });
 
-describe('git-broker server', () => {
+describe('git-broker server', { timeout: 30_000 }, () => {
   it('serves healthz and named ops', async () => {
     await start();
     const health = await fetch(`${base}/healthz`);

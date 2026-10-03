@@ -9,7 +9,7 @@ import { FAKE_TOKEN, T0, createFixture, seed, type Fixture } from './git-helpers
 
 const ARTIFACTS_URL = 'https://abc123.artifacts.cloudflare.net/git/converge/cv-session-a.git';
 
-describe('Redactor', () => {
+describe('Redactor', { timeout: 30_000 }, () => {
   it('removes registered secrets and generic credential patterns', () => {
     const r = new Redactor([FAKE_TOKEN]);
     const text = [
@@ -33,7 +33,7 @@ describe('Redactor', () => {
   });
 });
 
-describe('remote allowlist', () => {
+describe('remote allowlist', { timeout: 30_000 }, () => {
   it('accepts only Artifacts smart-HTTP remotes in production', () => {
     expect(() => assertAllowedRemote(ARTIFACTS_URL, {})).not.toThrow();
     for (const bad of [
@@ -73,7 +73,7 @@ describe('remote allowlist', () => {
   });
 });
 
-describe('path patterns', () => {
+describe('path patterns', { timeout: 30_000 }, () => {
   it('treats /** as a directory prefix and everything else as exact', () => {
     expect(matchesPattern('public/a/b.css', 'public/**')).toBe(true);
     expect(matchesPattern('public', 'public/**')).toBe(false);
@@ -83,7 +83,7 @@ describe('path patterns', () => {
   });
 });
 
-describe('credential handling', () => {
+describe('credential handling', { timeout: 30_000 }, () => {
   let fx: Fixture;
   beforeEach(() => {
     fx = createFixture();

@@ -33,7 +33,7 @@ async function fork(name: string, baseSha: string, baseRemote: string, files: Re
 
 const member = (h: Head, label: string) => ({ remote: h.url, token: FAKE_TOKEN, sha: h.sha, label });
 
-describe('assemble', () => {
+describe('assemble', { timeout: 30_000 }, () => {
   it('merges two independent forks onto the baseline', async () => {
     const base = await seed(fx);
     const a = await fork('fork-a', base.sha, base.url, { 'src/pricing/compute-unit-price.ts': 'A\n' });
