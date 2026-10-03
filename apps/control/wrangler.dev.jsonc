@@ -51,7 +51,7 @@
     "AUTH_MODE": "access",
     "ACCESS_ISSUER": "https://twilight-math-0e95.cloudflareaccess.com",
     "ACCESS_AUD": "84a50ac32239e18fca92af9a76bb748fa1fe5e9df5db998c509958ccc34bd859",
-    "OPERATOR_SUBJECTS": "yosefserkez@gmail.com",
+    "OPERATOR_SUBJECTS": "yosefserkez@gmail.com,558da052c06f2a2ac7d47e4a92d2f20d.access",
     "MODEL_PROVIDER": "anthropic",
     "MODEL_ID": "claude-opus-5-5",
     "MODEL_PRICE_SNAPSHOT": "{\"provider\":\"anthropic\",\"modelId\":\"claude-opus-5-5\",\"inputMicroUsdPerMTok\":4000000,\"outputMicroUsdPerMTok\":20000000,\"cacheReadMicroUsdPerMTok\":200000,\"cacheWriteMicroUsdPerMTok\":5000000,\"capturedAt\":1790294400000}",

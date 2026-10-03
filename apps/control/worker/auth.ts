@@ -45,13 +45,15 @@ export async function authenticate(req: Request, config: AppConfig, keys?: JWTVe
     throw new DomainError('UNAUTHENTICATED', 'invalid or expired Access assertion');
   }
   const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : null;
-  const subject = typeof payload.sub === 'string' && payload.sub ? payload.sub : null;
+  // Service tokens (automation) carry `common_name` = client ID and an empty `sub`.
+  const serviceClient = typeof payload.common_name === 'string' && payload.common_name ? payload.common_name : null;
+  const subject = typeof payload.sub === 'string' && payload.sub ? payload.sub : serviceClient;
   if (!subject) throw new DomainError('UNAUTHENTICATED', 'Access assertion has no subject');
   const allowed = config.OPERATOR_SUBJECTS;
   if (!allowed.includes(subject.toLowerCase()) && !(email && allowed.includes(email))) {
     throw new DomainError('FORBIDDEN', 'this identity is not an authorized operator');
   }
-  return { subject: email ?? subject, email, mode: 'access' };
+  return { subject: email ?? (serviceClient ? `service:${serviceClient}` : subject), email, mode: 'access' };
 }
 
 /**

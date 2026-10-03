@@ -3,7 +3,7 @@
 //   pnpm provision --env dev --apply
 // Artifacts namespaces are created on first repository create, so this script
 // does not need a namespace-create command. It does not touch other resources.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ENVIRONMENTS, ROOT, cf, fail, loadEnvLocal, parseArgs, readJsonc, requireEnv, step } from './lib.ts';
 
@@ -55,6 +55,42 @@ if (app) {
   console.log(`would create an Access app allowing ${operatorEmail}`);
 }
 
+step('Access service token for automation (seed, smoke)');
+const tokenName = `converge-automation-${args.env}`;
+const idVar = `CF_ACCESS_CLIENT_ID_${args.env.toUpperCase()}`;
+const secretVar = `CF_ACCESS_CLIENT_SECRET_${args.env.toUpperCase()}`;
+const tokens = await cf<Array<{ id: string; name: string; client_id: string }>>('/access/service_tokens');
+let serviceToken = tokens.find((t) => t.name === tokenName);
+if (serviceToken) {
+  console.log(`exists: ${tokenName} (reuse)`);
+  if (!process.env[secretVar]) console.log(`warning: ${secretVar} is not in .env.local; rotate the token to recover a secret`);
+} else if (args.apply) {
+  const created = await cf<{ id: string; name: string; client_id: string; client_secret: string }>('/access/service_tokens', {
+    method: 'POST',
+    body: JSON.stringify({ name: tokenName, duration: '8760h' }),
+  });
+  serviceToken = created;
+  // The secret is shown once: store it in the gitignored .env.local, never print it.
+  appendFileSync(join(ROOT, '.env.local'), `${idVar}=${created.client_id}\n${secretVar}=${created.client_secret}\n`, { mode: 0o600 });
+  console.log(`created: ${tokenName}; client id and secret saved to .env.local`);
+} else {
+  console.log(`would create ${tokenName} and save its credentials to .env.local`);
+}
+if (app && serviceToken) {
+  const policies = await cf<Array<{ id: string; name: string }>>(`/access/apps/${app.id}/policies`);
+  if (policies.some((p) => p.name === 'Converge automation')) {
+    console.log('automation policy exists');
+  } else if (args.apply) {
+    await cf(`/access/apps/${app.id}/policies`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Converge automation', decision: 'non_identity', include: [{ service_token: { token_id: serviceToken.id } }], precedence: 2 }),
+    });
+    console.log('added automation policy (service token only)');
+  } else {
+    console.log('would add an automation policy for the service token');
+  }
+}
+
 step('Wrangler configuration');
 const configPath = join(ROOT, 'apps/control', names.config);
 const vars = (readJsonc<{ vars: Record<string, string> }>(configPath)).vars;
@@ -63,7 +99,7 @@ const wanted: Record<string, string> = {
   AUTH_MODE: 'access',
   ACCESS_ISSUER: issuer,
   ACCESS_AUD: app?.aud ?? '<created on apply>',
-  OPERATOR_SUBJECTS: operatorEmail,
+  OPERATOR_SUBJECTS: serviceToken ? `${operatorEmail},${serviceToken.client_id}` : operatorEmail,
   CONTROL_ORIGIN: `https://${controlHost}`,
   PREVIEW_ORIGIN: `https://${previewHost}`,
 };
