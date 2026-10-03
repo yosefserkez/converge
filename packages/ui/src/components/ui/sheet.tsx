@@ -10,6 +10,11 @@ function Sheet(props: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
 }
 
+/** Opens the sheet. Use it instead of an onClick that sets `open`: it keeps a touch tap from closing the sheet again. */
+function SheetTrigger(props: SheetPrimitive.Trigger.Props) {
+  return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />;
+}
+
 function SheetContent({
   className,
   children,
@@ -61,4 +66,4 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
   return <SheetPrimitive.Description data-slot="sheet-description" className={cn('text-sm text-muted-foreground', className)} {...props} />;
 }
 
-export { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle };
+export { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger };

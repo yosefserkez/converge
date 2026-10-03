@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetTitle, cn } from '@converge/ui';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger, cn } from '@converge/ui';
 import { FlaskConical, Menu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { linkProps, useRoute } from '../lib/router.ts';
@@ -37,6 +37,7 @@ export function App({ sample }: { sample: { variant: string; variants: readonly 
   useEffect(() => setMenuOpen(false), [route]);
 
   return (
+    <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
     <div className="flex min-h-dvh flex-col">
       {sample && <SampleBanner variant={sample.variant} variants={sample.variants} />}
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-card focus:px-2 focus:py-1">
@@ -51,9 +52,10 @@ export function App({ sample }: { sample: { variant: string; variants: readonly 
             <a {...linkProps('/')} className="flex items-center gap-2 font-semibold">
               <span aria-hidden className="inline-block size-4 rounded bg-primary" /> Converge
             </a>
-            <button type="button" onClick={() => setMenuOpen(true)} className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted" aria-label="Open the project and session menu">
+            <SheetTrigger className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted" aria-label="Open the project and session menu">
               <Menu className="size-4" aria-hidden /> Menu
-            </button>
+            </SheetTrigger>
+
           </div>
           <main id="main" tabIndex={-1} className="w-full max-w-[1400px] flex-1 px-4 py-5 outline-none md:px-6">
             {route.name === 'home' && <HomePage />}
@@ -72,12 +74,11 @@ export function App({ sample }: { sample: { variant: string; variants: readonly 
           </main>
         </div>
       </div>
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent className="max-w-xs">
-          <SheetTitle className="sr-only">Project and sessions</SheetTitle>
-          <SidebarContent route={route} />
-        </SheetContent>
-      </Sheet>
+      <SheetContent className="max-w-xs">
+        <SheetTitle className="sr-only">Project and sessions</SheetTitle>
+        <SidebarContent route={route} />
+      </SheetContent>
     </div>
+    </Sheet>
   );
 }

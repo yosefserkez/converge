@@ -9,10 +9,13 @@ const REPLAY_ID = process.env.CONVERGE_E2E_REPLAY ?? 'rpl_suwonabsqmruq2gq6pvnct
 
 /** On phones the sidebar is a menu; open it before reading project and session links. */
 async function openNav(page: Page, isMobile: boolean) {
-  if (!isMobile) return;
+  if (!isMobile) return page.locator('aside');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'Open the project and session menu' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  // Touch devices: tap, as a person would.
+  await page.getByRole('button', { name: 'Open the project and session menu' }).tap();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  return dialog;
 }
 
 async function noHorizontalOverflow(page: Page) {
@@ -22,10 +25,10 @@ async function noHorizontalOverflow(page: Page) {
 
 test('the operator UI loads behind Access and shows the project', async ({ page, isMobile }) => {
   await page.goto('/');
-  await openNav(page, isMobile);
-  await expect(page.getByRole('heading', { name: 'Project' })).toBeVisible();
-  await expect(page.getByText(/Repo\s*cv-/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Sessions' })).toBeVisible();
+  const nav = await openNav(page, isMobile);
+  await expect(nav.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
+  await expect(nav.getByText(/Repo\s*cv-/)).toBeVisible();
+  await expect(nav.getByRole('heading', { name: 'Sessions', exact: true })).toBeVisible();
   await noHorizontalOverflow(page);
 });
 
@@ -41,8 +44,10 @@ test('a skip link moves keyboard focus to the main content', async ({ page, isMo
 
 test('settings show the limits and the model', async ({ page, isMobile }) => {
   await page.goto('/');
-  await openNav(page, isMobile);
-  await page.getByRole('link', { name: 'Settings and limits' }).click();
+  const nav = await openNav(page, isMobile);
+  const settings = nav.getByRole('link', { name: 'Settings and limits' });
+  if (isMobile) await settings.tap();
+  else await settings.click();
   await expect(page.getByText(/claude-/).first()).toBeVisible();
   await noHorizontalOverflow(page);
 });
