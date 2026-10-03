@@ -8,8 +8,9 @@ Last update: 2026-10-03. This file records completed work, actual test outcomes,
 |---|---|
 | Operator host (Access-protected) | https://converge-dev.converge-42.workers.dev |
 | Preview and replay host | https://converge-preview-dev.converge-42.workers.dev |
-| Canonical repository | `cv-storefront-b-main` in Artifacts namespace `converge-dev`, main `da9b77933f99a71882b08acdb61211ff6d04144f` (baseline) |
+| Canonical repository | `cv-storefront-b-main` in Artifacts namespace `converge-dev`. Baseline `da9b779`; main now `a663afc0f12a327dc4b39d515451001dd2e485a1` (promoted from the live run) |
 | Public replay (fixture run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_x6sgkwykc5ujbdgib32rjco54u |
+| Public replay (live run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_suwonabsqmruq2gq6pvnctj2vq |
 
 ## Phase gates
 
@@ -18,8 +19,8 @@ Last update: 2026-10-03. This file records completed work, actual test outcomes,
 | 0. Access, versions, skeleton | Done | `pnpm preflight`: 17/17; `docs/platform-preflight.md` |
 | 1. Real infrastructure slice | Done | Seed job created the Artifacts repo and pushed the baseline through the broker container; independent `git clone` confirmed `da9b779` |
 | 2. Deterministic end-to-end loop | Done on deployed infra | `pnpm smoke --env dev --fixture-run`: 18/18 (`docs/runs/2026-10-03-dev-fixture-smoke.log`) |
-| 3. Live agents | In progress | First live run found a tool-result bug (fixed, deployed); retry running |
-| 4. Review and promotion | Built, not yet run on deployed infra | Broker lease tests pass locally; deployed promotion pending |
+| 3. Live agents | Done | Live run `ses_spukrzguxi3dnyna2gs3vzeg5u` (Haiku 4.5): three agents overlapped (113 s with 2+ busy, 17 s with all 3); predicted interactions from real intents; real counterexample; live repair; `docs/runs/2026-10-03-dev-live-run.md` |
+| 4. Review and promotion | Done | Approved and promoted `a663afc`; `git clone` shows main equals the approved commit, with the failed anchor `5f6b438` as an ancestor |
 | 5. Interface and isolated demonstration | In progress | UI being built; gateway, capability checks, and replay publication verified |
 | 6. Hardening and handoff | Not started | |
 
@@ -45,16 +46,23 @@ The session was cancelled (not promoted) so the live run could use the preset ba
 | Typecheck | `pnpm -r typecheck` | all 6 packages pass |
 | Lint | `pnpm lint` | pass |
 | Deployed smoke | `pnpm smoke --env dev --fixture-run` | 18/18 |
-| Coordinator in Workers runtime | `pnpm --filter @converge/control test:workers` | being written |
+| Coordinator in Workers runtime | `pnpm --filter @converge/control test:workers` | 11 passed (schema, idempotency, seed, fencing, budget, full orchestration to promotion, restart) |
+| Security | `pnpm vitest run --project unit tests/faults` | 14 passed (Access JWT, CSRF, capabilities, redaction, config) |
 | Browser (Playwright, agent-browser) | | not yet run |
 
 ## Blockers
 
 None external. The account, Artifacts, Containers, Access, and the model key all work.
 
+## Open items
+
+- An assemble call hung twice on the first candidate of a session and recovered by step retry. Broker calls now time out after 180 s and log one line each; the root cause is not yet known.
+- Command receipts are written after the command's transaction. A crash between the two can make a retried command run again (for example `createSession` then returns `ACTIVE_SESSION_EXISTS`).
+- The live replay published before the readable-explanation fix shows proposal IDs in interaction explanations.
+
 ## Next steps
 
-1. Finish the live run; capture overlapping agent activity as evidence.
-2. Run a fresh fixture session and promote its final candidate; confirm main equals the approved commit.
-3. Merge the UI and the coordinator runtime tests; run browser checks at desktop and mobile widths.
-4. Fault tests, README, demo script, submission checklist, production deploy.
+1. Merge the UI; run browser checks at desktop and mobile widths against dev.
+2. Provision and deploy production; seed; smoke.
+3. Fresh demo project for the video recording (main has moved).
+4. Publish the source repository (needs your approval of host and visibility); record the video.
