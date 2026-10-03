@@ -105,7 +105,7 @@ describe('transitions', () => {
   it('every nonterminal candidate state can be cancelled or error', () => {
     for (const s of CandidateState.options.filter((s) => !isTerminal('candidate', s))) {
       expect(canTransition('candidate', s, 'cancelled')).toBe(true);
-      expect(canTransition('candidate', s, 'error')).toBe(true);
+      if (s !== 'error') expect(canTransition('candidate', s, 'error')).toBe(true);
     }
   });
 
@@ -116,7 +116,6 @@ describe('transitions', () => {
       'passed',
       'failed',
       'text_conflict',
-      'error',
       'cancelled',
     ]);
     expect(JobStatus.options.filter((s) => isTerminal('job', s))).toEqual(['succeeded', 'cancelled']);
@@ -134,6 +133,16 @@ describe('retryJob', () => {
     expect(() => retryJob({ status: 'failed', attemptNo: 1, fence: 7 }, 7)).toThrow(DomainError);
     expect(() => retryJob({ status: 'succeeded', attemptNo: 1, fence: 7 })).toThrow(/cannot move/);
     expect(() => retryJob({ status: 'running', attemptNo: 1, fence: 7 })).toThrow(/cannot move/);
+  });
+});
+
+describe('retry of infrastructure errors', () => {
+  it('an errored candidate can return to planned or testing; verdicts stay final', () => {
+    expect(canTransition('candidate', 'error', 'planned')).toBe(true);
+    expect(canTransition('candidate', 'error', 'testing')).toBe(true);
+    expect(canTransition('candidate', 'failed', 'testing')).toBe(false);
+    expect(canTransition('candidate', 'passed', 'testing')).toBe(false);
+    expect(canTransition('proposal', 'blocked', 'pending')).toBe(true);
   });
 });
 

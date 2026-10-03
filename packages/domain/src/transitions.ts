@@ -25,7 +25,6 @@ const SESSION: Table<SessionStatus> = {
   validating: ['repairing', 'ready', ...SESSION_EXITS],
   repairing: ['validating', ...SESSION_EXITS],
   ready: ['promoted', ...SESSION_EXITS],
-  // Parked for a human; can only be closed out.
   // A human retry resumes the session in the phase that still has work.
   needs_attention: ['running', 'validating', 'repairing', 'failed', 'cancelled'],
   promoted: [],
@@ -36,7 +35,8 @@ const SESSION: Table<SessionStatus> = {
 const PROPOSAL: Table<ProposalStatus> = {
   pending: ['working', 'cancelled'],
   working: ['sealed', 'blocked', 'cancelled'],
-  blocked: ['cancelled'],
+  // A human retry of a failed agent job puts the proposal back in the queue.
+  blocked: ['pending', 'cancelled'],
   // New work after sealing creates a new immutable revision, never an edit.
   sealed: [],
   cancelled: [],
@@ -50,7 +50,8 @@ const CANDIDATE: Table<CandidateState> = {
   passed: [],
   failed: [],
   text_conflict: [],
-  error: [],
+  // An infrastructure error is not a verdict: a human retry re-runs assembly or verification.
+  error: ['planned', 'testing', 'cancelled'],
   cancelled: [],
 };
 

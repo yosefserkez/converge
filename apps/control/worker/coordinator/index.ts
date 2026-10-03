@@ -477,6 +477,13 @@ export class ProjectCoordinator extends DurableObject<Env> {
     this.armAlarm();
     const updated = this.db.tx(() => {
       const j = queueAttempt(this.db, jobId, now);
+      if (job.kind === 'integrate' || job.kind === 'verify') {
+        const c = this.db.one<CandidateRow>('SELECT * FROM candidate WHERE id = ?', job.entity_id);
+        if (c?.state === 'error') {
+          this.db.run('UPDATE candidate SET error_json = NULL WHERE id = ?', c.id);
+          setCandidateState(this.db, c, job.kind === 'integrate' ? 'planned' : 'testing', now, { retry: j.attempt_no });
+        }
+      }
       if (job.kind === 'agent') {
         this.db.run("UPDATE proposal SET status = 'pending', summary = NULL, updated_at = ? WHERE id = ? AND status = 'blocked'", now, job.entity_id);
       }
