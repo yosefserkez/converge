@@ -477,7 +477,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const updated = this.db.tx(() => {
       const j = queueAttempt(this.db, jobId, now);
       if (job.kind === 'agent') {
-        this.db.run("UPDATE proposal SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'blocked'", now, job.entity_id);
+        this.db.run("UPDATE proposal SET status = 'pending', summary = NULL, updated_at = ? WHERE id = ? AND status = 'blocked'", now, job.entity_id);
       }
       if (job.session_id) {
         const s = getSession(this.db, job.session_id);
@@ -1156,6 +1156,20 @@ export class ProjectCoordinator extends DurableObject<Env> {
       throw new DomainError('OUT_OF_SCOPE_EDIT', 'sealed changes are outside the task scope', { paths: classified.outOfScope });
     }
     const intentDigest = await digestOf(intent);
+    // A feature may depend only on sealed revisions of other proposals in this session.
+    const sessionRevisions = new Set(
+      this.db
+        .all<{ id: string }>(
+          'SELECT r.id FROM proposal_revision r JOIN proposal q ON q.id = r.proposal_id WHERE q.session_id = ? AND q.id <> ?',
+          p.session_id,
+          p.id,
+        )
+        .map((r) => r.id),
+    );
+    const unknownDeps = intent.dependencyRevisionIds.filter((d) => !sessionRevisions.has(d));
+    if (p.kind === 'feature' && unknownDeps.length) {
+      throw new DomainError('INVALID_INPUT', 'declared dependencies must be sealed revisions of other proposals in this session', { unknownDeps });
+    }
     const dependencies =
       p.kind === 'repair' && p.base_candidate_id ? candidateMembers(this.db, p.base_candidate_id) : intent.dependencyRevisionIds;
     const now = Date.now();
@@ -1639,8 +1653,34 @@ export class ProjectCoordinator extends DurableObject<Env> {
   // Progression
   // =====================================================================
 
-  /** Advance the session after a state change; safe to call repeatedly. */
+  /**
+   * Advance the session after a state change; safe to call repeatedly. A
+   * failure here must not vanish: the session moves to needs_attention with the reason.
+   */
   private async advance(sessionId: string): Promise<void> {
+    try {
+      await this.advanceUnsafe(sessionId);
+    } catch (err) {
+      const reason = (err instanceof Error ? err.message : String(err)).slice(0, 300);
+      const now = Date.now();
+      this.db.tx(() => {
+        const s = getSession(this.db, sessionId);
+        appendEvent(this.db, {
+          sessionId,
+          key: `session:${sessionId}:advance-failed:${now}`,
+          type: 'session.advance_failed',
+          actor: SYSTEM_ACTOR,
+          entityType: 'session',
+          entityId: sessionId,
+          correlationId: sessionId,
+          payload: { reason },
+        }, now);
+        if (ACTIVE_SESSION_STATES.includes(s.status) && s.status !== 'ready') setSessionStatus(this.db, s, 'needs_attention', `planning failed: ${reason}`, now);
+      });
+    }
+  }
+
+  private async advanceUnsafe(sessionId: string): Promise<void> {
     const session = getSession(this.db, sessionId);
     if (!ACTIVE_SESSION_STATES.includes(session.status)) return;
     const integrationRepo = repoNameFor('candidate', sessionId, 'int');
@@ -1733,6 +1773,10 @@ export class ProjectCoordinator extends DurableObject<Env> {
   async recover(): Promise<{ dispatched: number; expired: number }> {
     const dispatched = await this.dispatchOutbox();
     const expired = await this.recoverLeases();
+    // Re-run progression for active sessions; a lost trigger never strands a session.
+    for (const s of this.db.all<{ id: string }>(`SELECT id FROM session WHERE status IN ('running','validating','repairing')`)) {
+      await this.advance(s.id);
+    }
     this.db.run("UPDATE preview SET state = 'expired', updated_at = ? WHERE state IN ('starting','active') AND expires_at < ?", Date.now(), Date.now());
     return { dispatched, expired };
   }

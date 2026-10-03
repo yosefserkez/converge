@@ -11,6 +11,7 @@ import {
   type TaskSpec,
   assertTransition,
   capabilitiesOf,
+  dependencyClosure,
   detectInteractions,
   newId,
   selectInitialCandidates,
@@ -133,7 +134,11 @@ export function refreshInteractions(
     })),
   });
   const live = new Set(predicted.map((i) => i.dedupeKey));
-  for (const i of predicted) {
+  // Show agent titles, not raw proposal IDs, in stored explanations.
+  const titles = new Map(proposals.map((p) => [p.id, p.title]));
+  const readable = (text: string) => text.replace(/prop_[a-z0-9]{26}/g, (id) => titles.get(id) ?? id);
+  for (const raw of predicted) {
+    const i = { ...raw, explanation: readable(raw.explanation) };
     const inserted = db.run(
       `INSERT OR IGNORE INTO interaction (id, session_id, left_proposal_id, right_proposal_id, left_intent_digest,
          right_intent_digest, contract_key, kind, state, explanation, dedupe_key, created_at, updated_at)
@@ -321,6 +326,10 @@ export function initialPlanInputs(db: Db, session: SessionRow): PlanInput[] | nu
     session.id,
   );
   const policy = parse<SessionPolicy>(session.policy_json);
+  // Every candidate includes the dependency closure of its members.
+  const all = standalone.map((s) => ({ revisionId: s.revisionId, dependencyRevisionIds: revisionDeps(db, s.revisionId) }));
+  const titleOf = new Map(standalone.map((s) => [s.revisionId, labels.get(s.proposalId) ?? s.proposalId]));
+  const seen = new Set<string>();
   return selectInitialCandidates({
     standalone,
     labels,
@@ -328,7 +337,19 @@ export function initialPlanInputs(db: Db, session: SessionRow): PlanInput[] | nu
     maxCandidates: policy.maxCandidates,
   })
     .filter((s) => s.kind !== 'baseline') // the baseline was planned at session start
-    .map((s) => ({ label: s.label, memberRevisionIds: s.revisionIds }));
+    .map((s) => {
+      const closure = dependencyClosure(s.revisionIds, all).map((r) => r.revisionId);
+      const added = closure.filter((id) => !s.revisionIds.includes(id));
+      const label = added.length ? `${s.label} (+ ${added.map((id) => titleOf.get(id)).join(', ')})` : s.label;
+      return { label, memberRevisionIds: closure };
+    })
+    .filter((p) => {
+      // Two selections can collapse to the same closure; plan each member set once.
+      const key = [...p.memberRevisionIds].sort().join(',');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 // ---------- verification outcomes ----------
