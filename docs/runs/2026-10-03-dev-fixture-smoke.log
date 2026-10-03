@@ -1,0 +1,53 @@
+
+> converge@ smoke /Users/yosef/Workspace/cfh/converge
+> node --experimental-strip-types scripts/smoke.ts --env dev --fixture-run
+
+
+▸ Unauthenticated access is refused
+PASS  operator API requires Access - HTTP 302
+
+▸ Health, config, project
+PASS  health - build 50bb5ac4e0a2
+PASS  config - auth access, live true
+PASS  project seeded - cv-storefront-b-main @ da9b77933f99a71882b08acdb61211ff6d04144f
+PASS  unknown API route returns JSON 404 - HTTP 404
+PASS  mutation without Idempotency-Key is refused - HTTP 422
+PASS  cross-origin mutation is refused (CSRF) - HTTP 403
+
+▸ Preview gateway
+PASS  preview gateway health - HTTP 200
+PASS  forged preview capability is refused - HTTP 403
+PASS  unknown replay returns 404 - HTTP 404
+
+▸ Fixture session (checked-in agents, no model calls)
+session ses_jlxedxge73v2zho4h64wudjodm
+PASS  session started - HTTP 202
+  11:54:15 running | Baseline:planned
+  11:54:21 running | Baseline:assembling
+  11:54:26 running | Baseline:testing
+  11:54:36 running | Baseline:passed
+  11:54:52 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:assembling, Checkout summary:assembling, Member pricing:assembling, Unit-price cache:assembling, Member pricing + Unit-price cache:assembling
+  11:56:26 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:testing, Checkout summary:testing, Member pricing:testing, Unit-price cache:assembling, Member pricing + Unit-price cache:testing
+  11:56:31 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:testing, Checkout summary:testing, Member pricing:passed, Unit-price cache:assembling, Member pricing + Unit-price cache:testing
+  11:56:36 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:failed, Checkout summary:passed, Member pricing:passed, Unit-price cache:assembling, Member pricing + Unit-price cache:failed
+  11:59:59 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:failed, Checkout summary:passed, Member pricing:passed, Unit-price cache:testing, Member pricing + Unit-price cache:failed
+  12:00:10 repairing | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:failed, Checkout summary:passed, Member pricing:passed, Unit-price cache:passed, Member pricing + Unit-price cache:failed
+  12:00:15 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:failed, Checkout summary:passed, Member pricing:passed, Unit-price cache:passed, Member pricing + Unit-price cache:failed, Full goal + Repair 1:assembling
+  12:00:20 validating | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:failed, Checkout summary:passed, Member pricing:passed, Unit-price cache:passed, Member pricing + Unit-price cache:failed, Full goal + Repair 1:testing
+  12:00:36 ready | Baseline:passed, Member pricing + Unit-price cache + Checkout summary:failed, Checkout summary:passed, Member pricing:passed, Unit-price cache:passed, Member pricing + Unit-price cache:failed, Full goal + Repair 1:passed
+PASS  fixture session reached ready - candidate cand_dl6quegyhf23nd7wd3fxuaaiwu passed every required check
+  Baseline                             passed   da9b77933f  cache.reuse=skipped checkout.summary=skipped pricing.isolation=passed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+  Member pricing + Unit-price cache + Checkout summary failed   c2e154631d  cache.reuse=passed checkout.summary=passed pricing.isolation=failed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+  Checkout summary                     passed   aa6a5a0384  cache.reuse=skipped checkout.summary=passed pricing.isolation=passed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+  Member pricing                       passed   1f0e809b47  cache.reuse=skipped checkout.summary=skipped pricing.isolation=passed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+  Unit-price cache                     passed   8c19538afe  cache.reuse=passed checkout.summary=skipped pricing.isolation=passed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+  Member pricing + Unit-price cache    failed   dd2addc527  cache.reuse=passed checkout.summary=skipped pricing.isolation=failed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+  Full goal + Repair 1                 passed   39b8784311  cache.reuse=passed checkout.summary=passed pricing.isolation=passed pricing.tiers=passed quote.contract=passed quote.quantity=passed
+PASS  pricing + caching pair fails customer isolation
+PASS  Member pricing passes alone - passed
+PASS  Unit-price cache passes alone - passed
+PASS  Checkout summary passes alone - passed
+PASS  interaction confirmed by evidence and resolved by repair - assumption:resolved
+PASS  final anchored candidate is promotable - Full goal + Repair 1 @ 39b878431106c18521de04d640a71104de2a50dd
+
+18/18 checks passed
