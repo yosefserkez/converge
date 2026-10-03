@@ -163,7 +163,8 @@ async function runTurn(ctx: JobContext, input: AgentInput, task: TaskSpec, state
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       maxRetries: 0,
       abortSignal: abort.signal,
-      providerOptions: { anthropic: { effort: 'medium' } },
+      // Haiku 4.5 rejects `effort`; newer models accept it.
+      ...(config.MODEL_ID.startsWith('claude-haiku') ? {} : { providerOptions: { anthropic: { effort: 'medium' } } }),
     });
   } catch (err) {
     clearTimeout(timer);

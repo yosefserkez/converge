@@ -101,7 +101,7 @@ async function main() {
   }
   await symlink(join(STOREFRONT_DIR, 'node_modules'), join(workspace, 'node_modules'), 'dir');
 
-  let lockfileMatchesImage = false;
+  let lockfileMatchesImage;
   try {
     const baked = await readFile(join(STOREFRONT_DIR, 'package-lock.json'));
     const loaded = prepared.find((f) => f.path === 'package-lock.json');

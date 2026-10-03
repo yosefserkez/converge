@@ -9,9 +9,10 @@ import { BrokerResponse, brokerOps, type BrokerOpInput, type BrokerOpName, type 
  * only in broker process memory.
  */
 const BROKER_PORT = 9000;
+const OP_TIMEOUT_MS = 180_000;
 
 export class GitBrokerContainer extends DurableObject<Env> {
-  private secret: string | null = null;
+  private ready: Promise<string> | null = null;
 
   private get container(): Container {
     const c = this.ctx.container;
@@ -19,26 +20,38 @@ export class GitBrokerContainer extends DurableObject<Env> {
     return c;
   }
 
-  private async ensureReady(): Promise<string> {
+  /** One startup at a time; concurrent operations share it. */
+  private ensureReady(): Promise<string> {
+    this.ready ??= this.startOrReuse().catch((err) => {
+      this.ready = null;
+      throw err;
+    });
+    return this.ready;
+  }
+
+  private async startOrReuse(): Promise<string> {
     const c = this.container;
-    if (!c.running || !this.secret) {
-      if (c.running) await c.destroy('restart to rotate broker secret');
+    // The secret lives in DO storage so a DO restart does not kill a running broker mid-operation.
+    let secret = await this.ctx.storage.get<string>('brokerSecret');
+    if (!c.running || !secret) {
+      if (c.running) await c.destroy('restart to set a new broker secret');
       const bytes = crypto.getRandomValues(new Uint8Array(32));
-      this.secret = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+      secret = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+      await this.ctx.storage.put('brokerSecret', secret);
       c.start({
         image: c.images!.broker!,
         enableInternet: true,
-        instance: 'lite',
-        env: { BROKER_SHARED_SECRET: this.secret, PORT: String(BROKER_PORT) },
+        instance: 'standard-1',
+        env: { BROKER_SHARED_SECRET: secret, PORT: String(BROKER_PORT) },
         labels: { role: 'git-broker' },
       });
-      await c.setInactivityTimeout(5 * 60_000);
     }
-    for (let i = 0; i < 60; i++) {
+    await c.setInactivityTimeout(10 * 60_000);
+    for (let i = 0; i < 120; i++) {
       try {
         const res = await c.getTcpPort(BROKER_PORT).fetch('http://broker/healthz');
         await res.body?.cancel();
-        if (res.ok) return this.secret;
+        if (res.ok) return secret;
       } catch {
         // not listening yet
       }
@@ -73,18 +86,31 @@ export class GitBrokerContainer extends DurableObject<Env> {
 
   private async op<N extends BrokerOpName>(name: N, input: BrokerOpInput<N>): Promise<BrokerOpOutput<N>> {
     const secret = await this.ensureReady();
-    const res = await this.container.getTcpPort(BROKER_PORT).fetch(`http://broker/op/${name}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-converge-broker-auth': secret },
-      body: JSON.stringify(input),
-    });
-    const body = BrokerResponse.parse(await res.json());
+    // Bound every operation: a lost or hung request fails fast and the workflow step retries.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), OP_TIMEOUT_MS);
+    let body: BrokerResponse;
+    try {
+      const res = await this.container.getTcpPort(BROKER_PORT).fetch(`http://broker/op/${name}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-converge-broker-auth': secret },
+        body: JSON.stringify(input),
+        signal: abort.signal,
+      });
+      body = BrokerResponse.parse(await res.json());
+    } catch (err) {
+      this.ready = null;
+      throw new DomainError('DEPENDENCY_UNAVAILABLE', `broker ${name} did not answer: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      clearTimeout(timer);
+    }
     if (!body.ok) throw new DomainError(asCode(body.error.code), `broker ${name}: ${body.error.message}`);
     return brokerOps[name].output.parse(body.result) as BrokerOpOutput<N>;
   }
 
   async destroyContainer(): Promise<void> {
-    this.secret = null;
+    this.ready = null;
+    await this.ctx.storage.delete('brokerSecret');
     if (this.ctx.container?.running) await this.ctx.container.destroy('cleanup');
   }
 }
