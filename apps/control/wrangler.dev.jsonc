@@ -47,7 +47,7 @@
   "observability": { "enabled": true },
   "vars": {
     "ENVIRONMENT": "dev",
-    "PROJECT_SLUG": "storefront-2",
+    "PROJECT_SLUG": "storefront-3",
     "AUTH_MODE": "access",
     "ACCESS_ISSUER": "https://twilight-math-0e95.cloudflareaccess.com",
     "ACCESS_AUD": "84a50ac32239e18fca92af9a76bb748fa1fe5e9df5db998c509958ccc34bd859",
