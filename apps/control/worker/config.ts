@@ -8,6 +8,8 @@ const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
 export const AppConfig = z
   .object({
     ENVIRONMENT: z.enum(['local', 'dev', 'prod']),
+    /** Registry entry this instance runs (see projects/). */
+    PROJECT_KIND: z.enum(['storefront', 'pastebin']).default('storefront'),
     PROJECT_SLUG: z.string().regex(/^[a-z0-9-]{3,32}$/),
     AUTH_MODE: z.enum(['local', 'access']),
     ACCESS_ISSUER: z.string(),

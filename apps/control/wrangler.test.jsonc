@@ -16,6 +16,7 @@
   "r2_buckets": [{ "binding": "EVIDENCE", "bucket_name": "converge-evidence-test" }],
   "vars": {
     "ENVIRONMENT": "local",
+    "PROJECT_KIND": "storefront",
     "PROJECT_SLUG": "storefront",
     "AUTH_MODE": "local",
     "ACCESS_ISSUER": "",

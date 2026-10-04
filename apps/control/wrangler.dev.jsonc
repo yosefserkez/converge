@@ -25,7 +25,8 @@
       "class_name": "ExecutionContainer",
       "scheduling_policy": "durable_object",
       "images": {
-        "workspace": { "dockerfile": "../../containers/execution.Dockerfile", "build_context": "../.." }
+        "workspace": { "dockerfile": "../../containers/execution.Dockerfile", "build_context": "../.." },
+        "project": { "dockerfile": "../../containers/project-runtime.Dockerfile", "build_context": "../.." }
       }
     },
     {
@@ -47,6 +48,7 @@
   "observability": { "enabled": true },
   "vars": {
     "ENVIRONMENT": "dev",
+    "PROJECT_KIND": "storefront",
     "PROJECT_SLUG": "storefront-3",
     "AUTH_MODE": "access",
     "ACCESS_ISSUER": "https://twilight-math-0e95.cloudflareaccess.com",
