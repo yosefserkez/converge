@@ -39,6 +39,8 @@ export interface ProjectDefinition {
   /** Lockfile path whose digest keys the dependency snapshot. */
   lockfile: string;
   deploy?: { url: string };
+  /** Extra paths a repair may edit beyond its members' paths. */
+  repairPaths?: readonly string[];
 }
 
 const STOREFRONT: ProjectDefinition = {
@@ -84,6 +86,7 @@ function fromManifest(path: string, text: string): ProjectDefinition {
     runtime: { kind: 'project', install: m.runtime.install, prepBuild: m.runtime.prepBuild, tools: m.runtime.tools, regression: m.runtime.regression, serve: m.runtime.serve },
     lockfile: 'pnpm-lock.yaml',
     deploy: m.deploy,
+    repairPaths: m.repairPaths,
   };
 }
 

@@ -541,7 +541,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const memberProposals = members
       .map((r) => this.db.one<ProposalRow>('SELECT p.* FROM proposal p JOIN proposal_revision r ON r.proposal_id = p.id WHERE r.id = ?', r)!)
       .filter(Boolean);
-    const editable = [...new Set(memberProposals.flatMap((p) => taskOf(p).editablePaths))];
+    const editable = [...new Set([...memberProposals.flatMap((p) => taskOf(p).editablePaths), ...(sessionProject(session).repairPaths ?? [])])];
     const repairNo = (this.db.value<number>("SELECT count(*) FROM proposal WHERE session_id = ? AND kind = 'repair'", session.id) ?? 0) + 1;
     const failing = latestRuns(this.db, failed.id).filter((r) => r.status === 'failed' || r.status === 'error');
     const task: TaskSpec = {

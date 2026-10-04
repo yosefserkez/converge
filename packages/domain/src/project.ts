@@ -37,6 +37,8 @@ export const ProjectManifest = z
     protectedPaths: z.array(PathPattern).min(1),
     goal: z.string().min(1).max(1000),
     tasks: z.array(ProjectTask).min(1).max(8),
+    /** Extra paths a repair may edit beyond its members' paths (for example, its own test folder). */
+    repairPaths: z.array(PathPattern).max(8).default([]),
     baselineFacts: BaselineFacts,
     checkSuite: z.enum(CHECK_SUITES),
     deploy: z.strictObject({ url: z.url({ protocol: /^https$/ }) }),

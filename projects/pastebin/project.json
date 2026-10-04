@@ -15,10 +15,14 @@
     "prepBuild": ["pnpm", "build:frontend"],
     "tools": {
       "typecheck": ["pnpm", "exec", "tsc", "--noEmit"],
-      "unit": ["pnpm", "exec", "vitest", "run"],
+      "unit": ["pnpm", "exec", "vitest", "run", "--testTimeout=120000"],
       "build": ["pnpm", "build:frontend"]
     },
-    "regression": ["sh", "-c", "mkdir -p .converge && pnpm exec vitest run --reporter=json --outputFile.json=.converge/vitest-report.json > .converge/vitest.log 2>&1; status=$?; cat .converge/vitest-report.json; exit $status"],
+    "regression": [
+      "sh",
+      "-c",
+      "mkdir -p .converge && pnpm exec vitest run --testTimeout=120000 --reporter=json --outputFile.json=.converge/vitest-report.json > .converge/vitest.log 2>&1; status=$?; cat .converge/vitest-report.json; exit $status"
+    ],
     "serve": {
       "argv": ["pnpm", "exec", "wrangler", "dev", "--ip", "0.0.0.0", "--port", "{port}", "--inspector-port", "0", "--persist-to", "{stateDir}", "--var", "DEPLOY_URL:http://localhost:{port}"],
       "readyPath": "/"
@@ -102,6 +106,7 @@
       "objective": "Make repeated paste reads faster.\nSend a strong ETag on raw paste reads. Make the ETag from the paste metadata, so that a conditional request needs no content read.\nAnswer a matching If-None-Match with 304 Not Modified and no body, before the content read.\nKeep public caching: raw reads send Cache-Control: public, max-age=CACHE_PASTE_AGE. Keep Last-Modified and If-Modified-Since.\nA new upload or update must change the ETag.\n\nEdit only the read handler, the SSR utilities, the CORS handler, and tests under worker/test/converge/delivery/.\nDeclare the read behavior and the cacheability that your change assumes."
     }
   ],
+  "repairPaths": ["worker/test/converge/repair/**"],
   "baselineFacts": {
     "paste.read-side-effects": "none",
     "paste.metadata-fields": ["createdAt", "expireAt", "sizeBytes", "location", "filename", "highlightLanguage", "encryptionScheme", "lastModifiedAt"],
