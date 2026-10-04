@@ -3,6 +3,7 @@ import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
 import { loadFixturePatch } from '../fixtures.ts';
 import { type JobContext, retrying } from './context.ts';
 import { runLiveAgent } from './live-agent.ts';
+import { materializeLimits } from '../projects.ts';
 
 export interface AgentInput {
   sessionId: string;
@@ -31,7 +32,7 @@ export async function materializeBaseline(ctx: JobContext, input: AgentInput): P
   return ctx.step.do('materialize pinned baseline', retrying, async () => {
     const bundle = await ctx.repos.withTokens([{ name: input.baseRepo, scope: 'read' }], (creds) => {
       const c = creds.get(input.baseRepo)!;
-      return ctx.broker.materialize({ remote: c.remote, token: c.token, sha: input.baseSha });
+      return ctx.broker.materialize({ remote: c.remote, token: c.token, sha: input.baseSha, ...materializeLimits(ctx.config.PROJECT_KIND) });
     });
     if (bundle.baselineSha !== input.baseSha) throw new Error('INVALID_STATE broker returned a different commit');
     const ref = await writeEvidence(ctx.env.EVIDENCE, {

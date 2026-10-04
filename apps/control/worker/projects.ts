@@ -108,3 +108,8 @@ export function registerProject(def: ProjectDefinition): void {
 export function harnessDigestFor(suite: ProjectDefinition['suite']): Promise<string> {
   return harnessDigest(suite);
 }
+
+/** Materialize bounds: imported projects carry larger generated files (for example worker-configuration.d.ts). */
+export function materializeLimits(kind: ProjectDefinition['kind']): { maxFileBytes?: number; maxTotalBytes?: number } {
+  return projectDefinition(kind).runtime.kind === 'project' ? { maxFileBytes: 1024 * 1024, maxTotalBytes: 16 * 1024 * 1024 } : {};
+}

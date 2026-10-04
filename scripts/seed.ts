@@ -8,7 +8,7 @@ const args = parseArgs();
 const api = apiFor(args.env);
 
 step(`Seed ${api.origin}`);
-const r = await api.post('/api/admin/seed', {}, `seed-${args.env}-storefront`);
+const r = await api.post('/api/admin/seed', {}, `seed-${args.env}-${Date.now()}`);
 if (r.status >= 400) fail(`seed failed: ${r.status} ${JSON.stringify(r.body)}`);
 console.log(`accepted: ${JSON.stringify(r.body)}`);
 

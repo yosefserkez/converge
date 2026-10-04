@@ -12,7 +12,7 @@ import type { ServeSpec } from '../runtime-types.ts';
 import { deployedTarget, deployedVersion } from './deploy-target.ts';
 import type { AssembleOutput } from '@converge/infrastructure/git/ops';
 import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
-import { type ProjectDefinition, projectDefinition } from '../projects.ts';
+import { type ProjectDefinition, materializeLimits, projectDefinition } from '../projects.ts';
 import { type JobContext, once, retrying } from './context.ts';
 
 // ---------------- seed ----------------
@@ -33,7 +33,7 @@ export async function runSeed(ctx: JobContext): Promise<void> {
     snapshotId = await step.do('prepare dependency snapshot', { retries: { limit: 1, delay: '10 seconds', backoff: 'constant' }, timeout: '20 minutes' }, async () => {
       const bundle = await ctx.repos.withTokens([{ name: canonicalRepo, scope: 'read' }], (creds) => {
         const c = creds.get(canonicalRepo)!;
-        return ctx.broker.materialize({ remote: c.remote, token: c.token, sha: headSha, maxTotalBytes: 16 * 1024 * 1024 });
+        return ctx.broker.materialize({ remote: c.remote, token: c.token, sha: headSha, ...materializeLimits(ctx.config.PROJECT_KIND) });
       });
       // One prep container per lockfile: Internet on, no secrets, then snapshot.
       const prep = ctx.env.EXECUTION.getByName(`prep-${baseline.lockfileDigest.slice(7, 23)}`);
@@ -154,7 +154,7 @@ export async function runVerify(ctx: JobContext): Promise<void> {
   const source = await step.do('materialize candidate source', retrying, async () => {
     const bundle = await repos.withTokens([{ name: input.repoName, scope: 'read' }], (creds) => {
       const c = creds.get(input.repoName)!;
-      return broker.materialize({ remote: c.remote, token: c.token, sha: input.headSha });
+      return broker.materialize({ remote: c.remote, token: c.token, sha: input.headSha, ...materializeLimits(ctx.config.PROJECT_KIND) });
     });
     const ref = await writeEvidence(env.EVIDENCE, {
       prefix: evidencePrefix(config.PROJECT_SLUG, input.sessionId, 'source'),
