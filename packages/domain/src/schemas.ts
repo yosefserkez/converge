@@ -79,7 +79,10 @@ export type BaselineFacts = z.infer<typeof BaselineFacts>;
 
 // ---------- tasks and revisions ----------
 
-export const Capability = z.enum(['membership-pricing', 'quote-cache', 'checkout-summary']);
+export const Capability = z.enum([
+  'membership-pricing', 'quote-cache', 'checkout-summary',
+  'view-limits', 'view-limits-ui', 'conditional-get',
+]);
 export type Capability = z.infer<typeof Capability>;
 
 export const TaskSpec = z.object({

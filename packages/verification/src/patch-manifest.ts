@@ -34,14 +34,56 @@ export interface FixturePatch {
 export function parseFixtureManifest(json: unknown, expectedRole?: FixtureRole): FixtureManifest {
   const manifest = FixtureManifestSchema.parse(json);
   if (expectedRole && manifest.role !== expectedRole) throw new Error(`manifest role ${manifest.role} is not ${expectedRole}`);
-  const paths = Object.keys(manifest.files);
-  if (paths.length === 0) throw new Error('fixture patch changes no files');
-  for (const [repoPath, source] of Object.entries(manifest.files)) {
-    if (source !== `files/${repoPath}`) throw new Error(`patch file for ${repoPath} must be files/${repoPath}`);
-    if (isProtectedPath(repoPath)) throw new Error(`fixture patch edits protected path ${repoPath}`);
-    if (!manifest.intent.affectedPaths.includes(repoPath)) throw new Error(`intent.affectedPaths omits ${repoPath}`);
-  }
+  assertFixtureFiles(manifest.files, manifest.intent, PROTECTED_PATHS);
   return manifest;
+}
+
+function assertFixtureFiles(files: Record<string, string>, intent: ChangeIntent, protectedPaths: readonly string[]): void {
+  const paths = Object.keys(files);
+  if (paths.length === 0) throw new Error('fixture patch changes no files');
+  for (const [repoPath, source] of Object.entries(files)) {
+    if (source !== `files/${repoPath}`) throw new Error(`patch file for ${repoPath} must be files/${repoPath}`);
+    if (isProtectedPath(repoPath, protectedPaths)) throw new Error(`fixture patch edits protected path ${repoPath}`);
+    if (!intent.affectedPaths.includes(repoPath)) throw new Error(`intent.affectedPaths omits ${repoPath}`);
+  }
+}
+
+// ---------- project fixtures (fixtures/projects/<slug>/<role>/) ----------
+
+export const PROJECT_FIXTURE_ROLES = ['storage', 'api-ui', 'delivery', 'repair'] as const;
+export type ProjectFixtureRole = (typeof PROJECT_FIXTURE_ROLES)[number];
+
+const ProjectFixtureManifestSchema = FixtureManifestSchema.extend({ role: z.enum(PROJECT_FIXTURE_ROLES) });
+export type ProjectFixtureManifest = z.infer<typeof ProjectFixtureManifestSchema>;
+
+export interface ProjectFixturePatch {
+  role: ProjectFixtureRole;
+  taskId: string;
+  /** Repository path to full replacement UTF-8 content. */
+  files: Record<string, string>;
+  intent: ChangeIntent;
+  summary: string;
+}
+
+/** Same rules as parseFixtureManifest, against the project's protected paths. */
+export function parseProjectFixtureManifest(
+  json: unknown,
+  protectedPaths: readonly string[],
+  expectedRole?: ProjectFixtureRole,
+): ProjectFixtureManifest {
+  const manifest = ProjectFixtureManifestSchema.parse(json);
+  if (expectedRole && manifest.role !== expectedRole) throw new Error(`manifest role ${manifest.role} is not ${expectedRole}`);
+  assertFixtureFiles(manifest.files, manifest.intent, protectedPaths);
+  return manifest;
+}
+
+export async function assembleProjectFixturePatch(
+  manifest: ProjectFixtureManifest,
+  readText: (relativePath: string) => Promise<string>,
+): Promise<ProjectFixturePatch> {
+  const files: Record<string, string> = {};
+  for (const [repoPath, source] of Object.entries(manifest.files)) files[repoPath] = await readText(source);
+  return { role: manifest.role, taskId: manifest.taskId, files, intent: manifest.intent, summary: manifest.summary };
 }
 
 /** Reads every patch file through `readText(relativePathInPatchDir)`. */

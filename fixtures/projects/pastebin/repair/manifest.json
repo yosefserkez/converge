@@ -1,0 +1,41 @@
+{
+  "role": "repair",
+  "taskId": "task-repair",
+  "summary": "Limited pastes skip the conditional path: no ETag, no 304 for If-None-Match or If-Modified-Since, and Cache-Control: no-store from the storage cache policy. Each content read of a limited paste uses a view. Unlimited pastes keep the strong ETag, 304 answers, and public caching.",
+  "files": {
+    "worker/handlers/handleRead.ts": "files/worker/handlers/handleRead.ts",
+    "worker/test/converge/repair/limited-conditional.spec.ts": "files/worker/test/converge/repair/limited-conditional.spec.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Repair the view-limit failure: a limited paste must never get a 304 or an ETag, so each read uses a view. Keep conditional reads for unlimited pastes.",
+    "reads": ["module:read-handler", "module:storage", "contract:paste.read-side-effects", "contract:paste.cacheability"],
+    "writes": ["module:read-handler"],
+    "affectedPaths": [
+      "worker/handlers/handleRead.ts",
+      "worker/test/converge/repair/limited-conditional.spec.ts"
+    ],
+    "assumptions": [
+      {
+        "key": "paste.read-side-effects",
+        "operator": "subset_of",
+        "expected": ["none", "consumes-view"],
+        "rationale": "A content read of a limited paste uses a view. The read handler sends 304 only for unlimited pastes, whose reads have no side effects."
+      },
+      {
+        "key": "paste.cacheability",
+        "operator": "subset_of",
+        "expected": ["public", "no-store"],
+        "rationale": "Limited pastes are no-store and get no ETag. Unlimited pastes stay public and keep conditional reads."
+      }
+    ],
+    "contractChanges": [],
+    "preservedInvariants": [
+      "Unlimited pastes send a strong ETag and answer a matching If-None-Match with 304.",
+      "Each content read of a limited paste uses one view.",
+      "The view limit stays active."
+    ],
+    "proposedCheckIds": ["paste.roundtrip", "paste.regression", "views.limit", "views.cache-safety", "delivery.conditional", "views.display"],
+    "dependencyRevisionIds": []
+  }
+}

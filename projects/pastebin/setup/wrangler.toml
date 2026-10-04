@@ -1,0 +1,80 @@
+name = "pb-converge"
+compatibility_date = "2025-04-24"
+
+workers_dev = true
+main = "worker/index.ts"
+
+[[rules]]
+type = "Text"
+globs = [ "**/*.html", "**/*.md", "**/*.css" ]
+fallthrough = true
+
+[assets]
+directory = "dist/frontend"
+run_worker_first = true
+binding = "ASSETS"
+
+[triggers]
+# clean r2 garbage every day
+crons = ["0 0 * * *"]
+
+[version_metadata]
+# Converge: the worker sends the deployed version in X-Converge-Version.
+binding = "CF_VERSION_METADATA"
+
+[observability]
+# enable to collect logs
+enabled = true
+
+#----------------------------------------
+# lines below are what you should modify
+#----------------------------------------
+
+[[kv_namespaces]]
+binding = "PB"  # do not touch this
+id = "REPLACE_WITH_KV_ID"  # id of your KV namespace
+
+[[r2_buckets]]
+binding = "R2"  # do not touch this
+bucket_name = "pb-converge"  # bucket name of your R2 bucket
+
+[vars]
+# must be consistent with your routes
+DEPLOY_URL = "https://pb-converge.converge-42.workers.dev"
+
+# url to repo, displayed in the index page
+REPO = "https://github.com/SharzyL/pastebin-worker"
+
+# the page title displayed in index page
+INDEX_PAGE_TITLE = "Pastebin Worker"
+
+# the name displayed in TOS
+TOS_MAINTAINER = "Sharzy"
+
+# the email displayed in TOS
+TOS_MAIL = "pb@shz.al"
+
+# Cache-Control max-age for static pages
+CACHE_STATIC_PAGE_AGE = 7200
+
+# Cache-Control max-age for paste pages
+CACHE_PASTE_AGE = 600
+
+# Default expiration
+DEFAULT_EXPIRATION = "7d"
+
+# Max expiration
+MAX_EXPIRATION = "90d"
+
+# A collection of {username: password} pair
+# Leave empty to disable auth
+BASIC_AUTH = {}
+
+# Files larger than this threshold will be stored in R2
+R2_THRESHOLD = "20K"
+
+# File larger than this will be denied
+R2_MAX_ALLOWED = "256M"
+
+# The following mimetypes will be converted to text/plain
+DISALLOWED_MIME_FOR_PASTE = ["text/html", "audio/x-mpegurl"]

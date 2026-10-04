@@ -2,6 +2,7 @@ export * from './canonical.ts';
 export * from './schemas.ts';
 export * from './errors.ts';
 export * from './catalog.ts';
+export * from './project.ts';
 export * from './order.ts';
 export * from './paths.ts';
 export * from './intent.ts';

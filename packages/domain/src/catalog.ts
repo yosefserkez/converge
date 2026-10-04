@@ -11,6 +11,12 @@ export interface CheckDefinition {
   /** Capability that must be present for the check to apply; undefined = universal invariant. */
   requires?: Capability;
   description: string;
+  /**
+   * Where the evidence comes from. 'black-box' (the default): the trusted harness
+   * sends HTTP requests from outside the candidate container. 'in-container': the
+   * candidate container runs the check; its result is evidence, not authority.
+   */
+  evidence?: 'black-box' | 'in-container';
 }
 
 export const CHECKS: readonly CheckDefinition[] = [
@@ -51,6 +57,60 @@ export const CHECKS: readonly CheckDefinition[] = [
 export const CHECK_IDS = CHECKS.map((c) => c.id);
 
 export const ALL_CAPABILITIES: readonly Capability[] = ['membership-pricing', 'quote-cache', 'checkout-summary'];
+
+/**
+ * Protected checks for the pastebin project (projects/pastebin). The harness
+ * module `@converge/verification` implements the black-box checks.
+ * paste.regression is the project's own Vitest suite in the candidate container.
+ */
+export const PASTEBIN_CHECKS: readonly CheckDefinition[] = [
+  {
+    id: 'paste.roundtrip',
+    title: 'Paste round trip',
+    description: 'Upload, read, HEAD, metadata, and delete keep their content and status codes.',
+  },
+  {
+    id: 'paste.regression',
+    title: 'Project test suite',
+    evidence: 'in-container',
+    description: "The project's Vitest suite passes with at least one test. In-container evidence: lower trust than the black-box checks.",
+  },
+  {
+    id: 'views.limit',
+    title: 'View limit',
+    requires: 'view-limits',
+    description: 'With views=2, two reads succeed and the third is 404. HEAD and metadata reads do not use a view.',
+  },
+  {
+    id: 'views.cache-safety',
+    title: 'Limited paste caching',
+    requires: 'view-limits',
+    description: 'Limited pastes send Cache-Control: no-store, no ETag, and never answer 304, so no read skips a view.',
+  },
+  {
+    id: 'delivery.conditional',
+    title: 'Conditional reads',
+    requires: 'conditional-get',
+    description: 'Unlimited pastes send a strong ETag, a matching If-None-Match gets 304, and public caching stays.',
+  },
+  {
+    id: 'views.display',
+    title: 'Remaining views display',
+    requires: 'view-limits-ui',
+    description: 'The display page and the metadata show the remaining views. The API docs describe the views field.',
+  },
+];
+
+export const PASTEBIN_CAPABILITIES: readonly Capability[] = ['view-limits', 'view-limits-ui', 'conditional-get'];
+
+export const CHECK_SUITES = ['storefront', 'pastebin'] as const;
+export type CheckSuiteId = (typeof CHECK_SUITES)[number];
+
+/** Check catalog per suite. The coordinator uses it for applicability. */
+export const CHECKS_BY_SUITE: Readonly<Record<CheckSuiteId, readonly CheckDefinition[]>> = {
+  storefront: CHECKS,
+  pastebin: PASTEBIN_CHECKS,
+};
 
 export function checkApplicability(check: CheckDefinition, capabilities: ReadonlySet<Capability>) {
   if (!check.requires) return { applicable: true, reason: 'universal invariant' };

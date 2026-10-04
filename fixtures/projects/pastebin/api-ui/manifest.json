@@ -1,0 +1,61 @@
+{
+  "role": "api-ui",
+  "taskId": "task-api-ui",
+  "summary": "The upload page has a Max views option, the upload client sends it as the views field, and scripts/pb has --views N. The display page shows \"Remaining views: N\" for a limited paste and \"Remaining views: unlimited\" otherwise, in the server-rendered page and the React page. doc/api.md documents views, maxViews, and viewsRemaining.",
+  "files": {
+    "shared/parsers.ts": "files/shared/parsers.ts",
+    "shared/uploadPaste.ts": "files/shared/uploadPaste.ts",
+    "frontend/components/PasteSettingPanel.tsx": "files/frontend/components/PasteSettingPanel.tsx",
+    "frontend/pages/PasteBin.tsx": "files/frontend/pages/PasteBin.tsx",
+    "frontend/pages/DisplayPaste.tsx": "files/frontend/pages/DisplayPaste.tsx",
+    "frontend/pages/DisplayPasteView.tsx": "files/frontend/pages/DisplayPasteView.tsx",
+    "frontend/utils/uploader.ts": "files/frontend/utils/uploader.ts",
+    "frontend/utils/utils.ts": "files/frontend/utils/utils.ts",
+    "worker/pages/display.ts": "files/worker/pages/display.ts",
+    "doc/api.md": "files/doc/api.md",
+    "scripts/pb": "files/scripts/pb",
+    "shared/test/converge/api-ui/views.spec.ts": "files/shared/test/converge/api-ui/views.spec.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Let users set a view limit on upload (web page, upload client, and CLI) and see the remaining views on the display page. Document the views field.",
+    "reads": ["contract:paste.upload-fields", "contract:paste.metadata-fields", "module:frontend", "module:display-page"],
+    "writes": ["module:frontend", "module:display-page", "module:upload-client", "module:docs", "module:cli"],
+    "affectedPaths": [
+      "shared/parsers.ts",
+      "shared/uploadPaste.ts",
+      "frontend/components/PasteSettingPanel.tsx",
+      "frontend/pages/PasteBin.tsx",
+      "frontend/pages/DisplayPaste.tsx",
+      "frontend/pages/DisplayPasteView.tsx",
+      "frontend/utils/uploader.ts",
+      "frontend/utils/utils.ts",
+      "worker/pages/display.ts",
+      "doc/api.md",
+      "scripts/pb",
+      "shared/test/converge/api-ui/views.spec.ts"
+    ],
+    "assumptions": [
+      {
+        "key": "paste.upload-fields",
+        "operator": "contains",
+        "expected": "views",
+        "rationale": "The upload page, the upload client, and scripts/pb send the view limit in the views form field."
+      },
+      {
+        "key": "paste.metadata-fields",
+        "operator": "contains",
+        "expected": "viewsRemaining",
+        "rationale": "The display page reads viewsRemaining from the paste metadata. Without it, the page shows unlimited."
+      }
+    ],
+    "contractChanges": [],
+    "preservedInvariants": [
+      "The upload form sends no views field when the option is empty.",
+      "The display page renders on the server for unencrypted pastes.",
+      "Existing upload fields and their meaning do not change."
+    ],
+    "proposedCheckIds": ["paste.roundtrip", "paste.regression", "views.display"],
+    "dependencyRevisionIds": []
+  }
+}

@@ -1,7 +1,8 @@
-import type { Capability, Observation } from '@converge/domain';
+import type { Capability, CheckSuiteId, Observation } from '@converge/domain';
 
 export interface AppRequest {
-  method: 'GET' | 'POST';
+  /** HEAD, PUT, and DELETE serve the pastebin suite. */
+  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE';
   path: string;
   headers?: Record<string, string>;
   body?: string;
@@ -32,6 +33,8 @@ export interface CandidateRef {
 }
 
 export interface RunSuiteOptions {
+  /** Check suite to run. Default 'storefront'. */
+  suite?: CheckSuiteId;
   target: AppTarget;
   capabilities: readonly Capability[];
   candidate: CandidateRef;

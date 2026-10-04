@@ -1,0 +1,114 @@
+{
+  "slug": "pastebin",
+  "source": {
+    "url": "https://github.com/SharzyL/pastebin-worker",
+    "commit": "0835cac4ab8f974035d31845f5c2b93b0c85b5c6"
+  },
+  "setupFiles": {
+    "wrangler.toml": "setup/wrangler.toml",
+    "worker/index.ts": "setup/worker/index.ts",
+    "worker/handlers/handleRead.ts": "setup/worker/handlers/handleRead.ts",
+    "worker/storage/cachePolicy.ts": "setup/worker/storage/cachePolicy.ts"
+  },
+  "runtime": {
+    "install": ["pnpm", "install", "--frozen-lockfile"],
+    "prepBuild": ["pnpm", "build:frontend"],
+    "tools": {
+      "typecheck": ["pnpm", "exec", "tsc", "--noEmit"],
+      "unit": ["pnpm", "exec", "vitest", "run", "--reporter=default", "--reporter=json", "--outputFile.json=.converge/vitest-report.json"],
+      "build": ["pnpm", "build:frontend"]
+    },
+    "serve": {
+      "argv": ["pnpm", "exec", "wrangler", "dev", "--ip", "0.0.0.0", "--port", "{port}", "--inspector-port", "0", "--persist-to", "{stateDir}", "--var", "DEPLOY_URL:http://localhost:{port}"],
+      "readyPath": "/"
+    }
+  },
+  "protectedPaths": [
+    "package.json",
+    "pnpm-lock.yaml",
+    "wrangler.toml",
+    "worker/index.ts",
+    "worker-configuration.d.ts",
+    "tsconfig.json",
+    "worker/tsconfig.json",
+    "frontend/tsconfig.json",
+    "vitest.config.js",
+    "eslint.config.js",
+    "frontend/vite.config.js",
+    "tailwind.config.js",
+    ".github/**",
+    "worker/test/accessCounter.spec.ts",
+    "worker/test/basic.spec.ts",
+    "worker/test/basicAuth.spec.ts",
+    "worker/test/cloudflare-test.d.ts",
+    "worker/test/common.spec.ts",
+    "worker/test/controlHeaders.spec.ts",
+    "worker/test/docPages.spec.ts",
+    "worker/test/env.d.ts",
+    "worker/test/head.spec.ts",
+    "worker/test/markdownSanitize.spec.ts",
+    "worker/test/mpu.spec.ts",
+    "worker/test/mpuErrors.spec.ts",
+    "worker/test/r2.spec.ts",
+    "worker/test/roles.spec.ts",
+    "worker/test/ssr.spec.ts",
+    "worker/test/storage.spec.ts",
+    "worker/test/testUtils.ts",
+    "worker/test/tsconfig.json",
+    "worker/test/uploadOptions.spec.ts",
+    "worker/test/writeErrors.spec.ts",
+    "shared/test/parser.spec.ts",
+    "shared/test/uploadPaste.spec.ts",
+    "frontend/test/crypto.spec.ts",
+    "frontend/test/display.spec.tsx",
+    "frontend/test/index.spec.tsx",
+    "frontend/test/testUtils.ts",
+    "frontend/test/tsconfig.json"
+  ],
+  "goal": "Add view-limited pastes (burn after N views) with an upload option and a remaining-views display, and make unlimited paste reads faster with conditional requests. Do not break existing pastes, uploads, or caching of unlimited pastes.",
+  "tasks": [
+    {
+      "id": "task-storage",
+      "title": "View-limited storage",
+      "role": "storage",
+      "ordinal": 0,
+      "capabilityIds": ["view-limits"],
+      "editablePaths": ["worker/storage/**", "shared/interfaces.ts", "worker/handlers/handleWrite.ts", "worker/test/converge/storage/**"],
+      "requiredCheckIds": ["paste.roundtrip", "paste.regression", "views.limit", "views.cache-safety"],
+      "preservedInvariantIds": ["paste-roundtrip", "unlimited-pastes-unchanged", "metadata-reads-free"],
+      "objective": "Add a view limit to pastes. Accept the `views` upload form field: an integer from 1 to 1000. Reject any other value with 400.\nKeep the limit in the paste metadata as `maxViews` and `viewsRemaining`. Old metadata has no view fields. Treat such a paste as unlimited.\nEach content read of a limited paste uses one view. The read that uses the last view deletes the paste. Later reads get 404.\nHEAD requests and metadata reads do not use a view.\nReturn `maxViews` and `viewsRemaining` in the upload and metadata responses. Leave them out for unlimited pastes.\nA limited paste must not be cached. Its responses send Cache-Control: no-store.\nDo not change the behavior of unlimited pastes.\n\nEdit only the storage layer, the shared interfaces, the upload handler, and tests under worker/test/converge/storage/.\nDeclare the read side effects and the metadata fields that you change."
+    },
+    {
+      "id": "task-api-ui",
+      "title": "Upload option and display",
+      "role": "api-ui",
+      "ordinal": 1,
+      "capabilityIds": ["view-limits-ui"],
+      "editablePaths": ["shared/uploadPaste.ts", "shared/parsers.ts", "frontend/**", "worker/pages/**", "doc/**", "scripts/**", "shared/test/converge/api-ui/**"],
+      "requiredCheckIds": ["paste.roundtrip", "paste.regression", "views.display"],
+      "preservedInvariantIds": ["paste-roundtrip", "display-page-ssr", "upload-form-fields"],
+      "objective": "Let users set and see a view limit.\nAdd a \"Max views\" option to the settings panel of the upload page. An empty value means no limit. Send it as the `views` form field. Add the same option to the upload client in shared/uploadPaste.ts and `--views N` to scripts/pb.\nShow the remaining views on the display page, in the server-rendered page and in the React page. Show \"Remaining views: N\" for a limited paste and \"Remaining views: unlimited\" for a paste without a limit.\nDocument the `views` field and the `maxViews` and `viewsRemaining` metadata fields in doc/api.md.\nThe storage task adds the server side of the limit. Use only the fields that it declares, and work when they are absent.\n\nEdit only the frontend (not its build config), the shared upload client and parsers, the worker pages, the docs, the scripts, and tests under shared/test/converge/api-ui/ or frontend/test/converge/api-ui/.\nDeclare the upload and metadata fields that your interface depends on."
+    },
+    {
+      "id": "task-delivery",
+      "title": "Conditional reads",
+      "role": "delivery",
+      "ordinal": 2,
+      "capabilityIds": ["conditional-get"],
+      "editablePaths": ["worker/handlers/handleRead.ts", "worker/ssrUtils.ts", "worker/handlers/handleCors.ts", "worker/test/converge/delivery/**"],
+      "requiredCheckIds": ["paste.roundtrip", "paste.regression", "delivery.conditional"],
+      "preservedInvariantIds": ["paste-roundtrip", "public-paste-caching", "last-modified"],
+      "objective": "Make repeated paste reads faster.\nSend a strong ETag on raw paste reads. Make the ETag from the paste metadata, so that a conditional request needs no content read.\nAnswer a matching If-None-Match with 304 Not Modified and no body, before the content read.\nKeep public caching: raw reads send Cache-Control: public, max-age=CACHE_PASTE_AGE. Keep Last-Modified and If-Modified-Since.\nA new upload or update must change the ETag.\n\nEdit only the read handler, the SSR utilities, the CORS handler, and tests under worker/test/converge/delivery/.\nDeclare the read behavior and the cacheability that your change assumes."
+    }
+  ],
+  "baselineFacts": {
+    "paste.read-side-effects": "none",
+    "paste.metadata-fields": ["createdAt", "expireAt", "sizeBytes", "location", "filename", "highlightLanguage", "encryptionScheme", "lastModifiedAt"],
+    "paste.cacheability": "public",
+    "paste.upload-fields": ["c", "e", "s", "n", "p", "lang", "encryption-scheme"]
+  },
+  "checkSuite": "pastebin",
+  "deploy": {
+    "url": "https://pb-converge.converge-42.workers.dev"
+  }
+}

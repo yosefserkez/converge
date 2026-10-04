@@ -1,0 +1,59 @@
+{
+  "role": "storage",
+  "taskId": "task-storage",
+  "summary": "Pastes can have a view limit. The upload accepts views=1..1000 and stores maxViews and viewsRemaining in the paste metadata. Each content read in the storage layer uses one view; the read that uses the last view deletes the paste. HEAD and metadata reads do not use a view. Limited pastes send Cache-Control: no-store. Unlimited pastes do not change.",
+  "files": {
+    "worker/storage/storage.ts": "files/worker/storage/storage.ts",
+    "worker/storage/cachePolicy.ts": "files/worker/storage/cachePolicy.ts",
+    "shared/interfaces.ts": "files/shared/interfaces.ts",
+    "worker/handlers/handleWrite.ts": "files/worker/handlers/handleWrite.ts",
+    "worker/test/converge/storage/views.spec.ts": "files/worker/test/converge/storage/views.spec.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Add view-limited pastes: store a view limit, use one view on each content read, and delete the paste after the last view.",
+    "reads": ["module:storage", "module:upload-handler", "contract:paste.read-side-effects", "contract:paste.metadata-fields"],
+    "writes": ["module:storage", "module:upload-handler", "contract:paste.read-side-effects", "contract:paste.metadata-fields", "contract:paste.upload-fields", "contract:paste.cacheability"],
+    "affectedPaths": [
+      "worker/storage/storage.ts",
+      "worker/storage/cachePolicy.ts",
+      "shared/interfaces.ts",
+      "worker/handlers/handleWrite.ts",
+      "worker/test/converge/storage/views.spec.ts"
+    ],
+    "assumptions": [],
+    "contractChanges": [
+      {
+        "key": "paste.read-side-effects",
+        "before": "none",
+        "after": ["none", "consumes-view"],
+        "explanation": "A content read of a limited paste uses one view and can delete the paste. Reads of unlimited pastes, HEAD requests, and metadata reads have no side effects."
+      },
+      {
+        "key": "paste.metadata-fields",
+        "before": ["createdAt", "expireAt", "sizeBytes", "location", "filename", "highlightLanguage", "encryptionScheme", "lastModifiedAt"],
+        "after": ["createdAt", "expireAt", "sizeBytes", "location", "filename", "highlightLanguage", "encryptionScheme", "lastModifiedAt", "maxViews", "viewsRemaining"],
+        "explanation": "Upload and metadata responses add maxViews and viewsRemaining for limited pastes. Both fields are absent for unlimited pastes."
+      },
+      {
+        "key": "paste.upload-fields",
+        "before": ["c", "e", "s", "n", "p", "lang", "encryption-scheme"],
+        "after": ["c", "e", "s", "n", "p", "lang", "encryption-scheme", "views"],
+        "explanation": "The upload accepts views, an integer from 1 to 1000. Any other value gets 400."
+      },
+      {
+        "key": "paste.cacheability",
+        "before": "public",
+        "after": ["public", "no-store"],
+        "explanation": "Limited pastes send Cache-Control: no-store, because a cached copy lets a reader skip a view. Unlimited pastes stay public."
+      }
+    ],
+    "preservedInvariants": [
+      "Upload, read, HEAD, metadata, and delete of unlimited pastes do not change.",
+      "HEAD requests and metadata reads do not use a view.",
+      "Old metadata without view fields reads as an unlimited paste."
+    ],
+    "proposedCheckIds": ["paste.roundtrip", "paste.regression", "views.limit", "views.cache-safety"],
+    "dependencyRevisionIds": []
+  }
+}

@@ -1,7 +1,19 @@
-import { CHECKS, type CheckDefinition, checkApplicability, type CheckResult, type Digest, digestOf } from '@converge/domain';
+import {
+  CHECKS,
+  CHECKS_BY_SUITE,
+  type CheckDefinition,
+  checkApplicability,
+  type CheckResult,
+  type CheckSuiteId,
+  type Digest,
+  digestOf,
+  PASTEBIN_CHECKS,
+} from '@converge/domain';
 import { CHECK_IMPLEMENTATIONS } from './checks/index.ts';
+import type { CheckImpl } from './checks/context.ts';
 import { CHECKOUT_PATTERNS } from './checks/checkout-summary.ts';
 import { EXPECTATIONS, HARNESS_VERSION } from './expectations.ts';
+import { PASTEBIN_CHECK_IMPLEMENTATIONS, PASTEBIN_EXPECTATIONS, PASTEBIN_HARNESS_VERSION } from './projects/pastebin/index.ts';
 import { InstancePool } from './instances.ts';
 import { Recorder } from './recorder.ts';
 import { buildCheckResult } from './result.ts';
@@ -11,9 +23,29 @@ import type { RunSuiteOptions } from './types.ts';
 const DEFAULT_MAX_INSTANCES = 2;
 const DEFAULT_CHECK_TIMEOUT_MS = 60_000;
 
-/** Digest over everything that decides a verdict: version, catalog, and expectations. */
-export function harnessDigest(): Promise<Digest> {
-  return digestOf({ HARNESS_VERSION, checks: CHECKS, expectations: EXPECTATIONS, checkoutPatterns: CHECKOUT_PATTERNS });
+/** Implementations per suite. In-container checks (for example paste.regression) have none here. */
+const IMPLEMENTATIONS: Readonly<Record<CheckSuiteId, Readonly<Record<string, CheckImpl>>>> = {
+  storefront: CHECK_IMPLEMENTATIONS,
+  pastebin: PASTEBIN_CHECK_IMPLEMENTATIONS,
+};
+
+/**
+ * Digest over everything that decides a verdict in one suite: version, catalog,
+ * and expectations. Each suite has its own digest. The storefront input is
+ * unchanged, so storefront digests stay the same.
+ */
+export function harnessDigest(suite: CheckSuiteId = 'storefront'): Promise<Digest> {
+  switch (suite) {
+    case 'storefront':
+      return digestOf({ HARNESS_VERSION, checks: CHECKS, expectations: EXPECTATIONS, checkoutPatterns: CHECKOUT_PATTERNS });
+    case 'pastebin':
+      return digestOf({ HARNESS_VERSION: PASTEBIN_HARNESS_VERSION, checks: PASTEBIN_CHECKS, expectations: PASTEBIN_EXPECTATIONS });
+  }
+}
+
+/** The checks that the harness runs over HTTP: every catalog check except in-container ones. */
+export function blackBoxChecks(suite: CheckSuiteId): readonly CheckDefinition[] {
+  return CHECKS_BY_SUITE[suite].filter((def) => (def.evidence ?? 'black-box') === 'black-box');
 }
 
 function describeError(err: unknown): string {
@@ -38,6 +70,7 @@ async function withDeadline<T>(promise: Promise<T>, ms: number, label: string): 
 
 interface RunCheckArgs {
   def: CheckDefinition;
+  implementations: Readonly<Record<string, CheckImpl>>;
   capabilities: ReadonlySet<Capability>;
   pool: InstancePool;
   candidate: RunSuiteOptions['candidate'];
@@ -46,13 +79,13 @@ interface RunCheckArgs {
   timeoutMs: number;
 }
 
-async function runCheck({ def, capabilities, pool, candidate, digest, now, timeoutMs }: RunCheckArgs): Promise<CheckResult> {
+async function runCheck({ def, implementations, capabilities, pool, candidate, digest, now, timeoutMs }: RunCheckArgs): Promise<CheckResult> {
   const startedAt = now();
   const applicability = checkApplicability(def, capabilities);
   const rec = new Recorder();
   let error: string | undefined;
   if (applicability.applicable) {
-    const impl = CHECK_IMPLEMENTATIONS[def.id];
+    const impl = implementations[def.id];
     if (!impl) {
       error = `no harness implementation for check ${def.id}`;
     } else {
@@ -77,18 +110,23 @@ async function runCheck({ def, capabilities, pool, candidate, digest, now, timeo
 }
 
 /**
- * Runs every catalog check against the candidate over HTTP. The harness builds
- * each CheckResult itself; candidate output never decides a status.
+ * Runs every black-box check of the selected suite (default storefront)
+ * against the candidate over HTTP. The harness builds each CheckResult itself;
+ * candidate output never decides a status.
  */
 export async function runSuite(opts: RunSuiteOptions): Promise<CheckResult[]> {
+  const suite = opts.suite ?? 'storefront';
   const now = opts.now ?? Date.now;
   const capabilities = new Set(opts.capabilities);
   const pool = new InstancePool(opts.target, opts.maxInstances ?? DEFAULT_MAX_INSTANCES);
-  const digest = await harnessDigest();
+  const digest = await harnessDigest(suite);
   const timeoutMs = opts.checkTimeoutMs ?? DEFAULT_CHECK_TIMEOUT_MS;
+  const implementations = IMPLEMENTATIONS[suite];
   try {
     return await Promise.all(
-      CHECKS.map((def) => runCheck({ def, capabilities, pool, candidate: opts.candidate, digest, now, timeoutMs })),
+      blackBoxChecks(suite).map((def) =>
+        runCheck({ def, implementations, capabilities, pool, candidate: opts.candidate, digest, now, timeoutMs }),
+      ),
     );
   } finally {
     await pool.close();

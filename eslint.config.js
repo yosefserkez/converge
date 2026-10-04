@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.wrangler/**', '**/worker-configuration.d.ts', '.claude/**', 'fixtures/deterministic/**', 'test-results/**', 'playwright-report/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/.wrangler/**', '**/worker-configuration.d.ts', '.claude/**', 'fixtures/deterministic/**', 'fixtures/projects/**', 'projects/*/setup/**', 'test-results/**', 'playwright-report/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

@@ -1,0 +1,41 @@
+{
+  "role": "delivery",
+  "taskId": "task-delivery",
+  "summary": "Raw paste reads send a strong ETag made from the paste metadata. A matching If-None-Match gets 304 Not Modified before the content read, so a revalidation costs one metadata read and no body. Public caching (Cache-Control: public, max-age=CACHE_PASTE_AGE) and Last-Modified stay.",
+  "files": {
+    "worker/handlers/handleRead.ts": "files/worker/handlers/handleRead.ts",
+    "worker/test/converge/delivery/conditional.spec.ts": "files/worker/test/converge/delivery/conditional.spec.ts"
+  },
+  "intent": {
+    "schemaVersion": 1,
+    "objective": "Make repeated paste reads faster with a strong ETag and 304 answers to a matching If-None-Match, without a content read.",
+    "reads": ["module:read-handler", "contract:paste.read-side-effects", "contract:paste.cacheability"],
+    "writes": ["module:read-handler"],
+    "affectedPaths": [
+      "worker/handlers/handleRead.ts",
+      "worker/test/converge/delivery/conditional.spec.ts"
+    ],
+    "assumptions": [
+      {
+        "key": "paste.read-side-effects",
+        "operator": "eq",
+        "expected": "none",
+        "rationale": "A 304 answer skips the content read. That is correct only when a content read has no side effects."
+      },
+      {
+        "key": "paste.cacheability",
+        "operator": "eq",
+        "expected": "public",
+        "rationale": "Every paste may be cached and revalidated with its ETag, so a 304 answer is always correct."
+      }
+    ],
+    "contractChanges": [],
+    "preservedInvariants": [
+      "Raw reads send Cache-Control: public, max-age=CACHE_PASTE_AGE.",
+      "Last-Modified and If-Modified-Since behave as before.",
+      "A new upload or update changes the ETag."
+    ],
+    "proposedCheckIds": ["paste.roundtrip", "paste.regression", "delivery.conditional"],
+    "dependencyRevisionIds": []
+  }
+}
