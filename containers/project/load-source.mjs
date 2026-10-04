@@ -72,7 +72,7 @@ async function main() {
     if (problem) fail(`invalid path ${JSON.stringify(f?.path)}: ${problem}`);
     if (seen.has(f.path)) fail(`duplicate path ${f.path}`);
     seen.add(f.path);
-    const bytes = Buffer.from(String(f.utf8 ?? ''), 'utf8');
+    const bytes = typeof f.base64 === 'string' ? Buffer.from(f.base64, 'base64') : Buffer.from(String(f.utf8 ?? ''), 'utf8');
     if (sha256(bytes) !== f.sha256) fail(`digest mismatch for ${f.path}`);
     const target = resolve(workspace, f.path);
     if (!target.startsWith(workspace + sep)) fail(`path escapes workspace: ${f.path}`);

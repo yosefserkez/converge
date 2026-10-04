@@ -46,14 +46,17 @@ export async function materialize(ws: OpWorkspace, input: MaterializeIn): Promis
   for (const e of entries) {
     const bytes = blobs.get(e.oid);
     if (!bytes) throw new DomainError('INTERNAL', `blob missing for ${e.path}`);
-    if (bytes.includes(0)) throw new DomainError('INVALID_INPUT', `binary file not allowed: ${e.path}`, { path: e.path });
-    let utf8: string;
-    try {
-      utf8 = decoder.decode(bytes);
-    } catch {
-      throw new DomainError('INVALID_INPUT', `file is not valid UTF-8: ${e.path}`, { path: e.path });
+    const sha256 = await digestBytes(bytes);
+    let utf8: string | null = null;
+    if (!bytes.includes(0)) {
+      try {
+        utf8 = decoder.decode(bytes);
+      } catch {
+        utf8 = null;
+      }
     }
-    files.push({ path: e.path, utf8, sha256: await digestBytes(bytes) });
+    // Binary files (icons, images) travel as base64. Agents cannot edit them.
+    files.push(utf8 === null ? { path: e.path, utf8: '', base64: Buffer.from(bytes).toString('base64'), sha256 } : { path: e.path, utf8, sha256 });
   }
   return { schemaVersion: 1, baselineSha: input.sha, files };
 }

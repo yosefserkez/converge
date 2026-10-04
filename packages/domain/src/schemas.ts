@@ -202,7 +202,8 @@ export const ApprovalRequest = z.object({
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequest>;
 
-export const SourceFile = z.object({ path: RepoPath, utf8: z.string(), sha256: Digest });
+/** A text file has `utf8`. A binary file has `base64` and an empty `utf8`. `sha256` covers the raw bytes. */
+export const SourceFile = z.object({ path: RepoPath, utf8: z.string(), base64: z.string().optional(), sha256: Digest });
 export type SourceFile = z.infer<typeof SourceFile>;
 
 export const SourceBundle = z.object({

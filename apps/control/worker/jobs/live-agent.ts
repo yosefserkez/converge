@@ -5,6 +5,7 @@ import {
   ChangeIntent,
   SHARED_SYSTEM_INSTRUCTION,
   type SourceBundle,
+  type SourceFile,
   type TaskSpec,
   digestBytes,
   estimateMaxCost,
@@ -123,8 +124,8 @@ export async function runLiveAgent(ctx: JobContext, input: AgentInput, baseline:
       verifyEvidence<SourceBundle>(env.EVIDENCE, baseline.key, baseline.sha256),
       verifyEvidence<SourceBundle>(env.EVIDENCE, state.source.key, state.source.sha256),
     ]);
-    const before = new Map(base.files.map((f) => [f.path, f.utf8]));
-    const after = new Map(current.files.map((f) => [f.path, f.utf8]));
+    const before = new Map(base.files.map((f) => [f.path, fileText(f)]));
+    const after = new Map(current.files.map((f) => [f.path, fileText(f)]));
     const out: Array<{ path: string; utf8: string | null }> = [];
     for (const [path, utf8] of after) if (before.get(path) !== utf8) out.push({ path, utf8 });
     for (const path of before.keys()) if (!after.has(path)) out.push({ path, utf8: null });
@@ -199,7 +200,7 @@ async function runTurn(ctx: JobContext, input: AgentInput, task: TaskSpec, state
   }
 
   let next: AgentState = { ...state };
-  const files = new Map(bundle.files.map((f) => [f.path, f.utf8]));
+  const files = new Map(bundle.files.map((f) => [f.path, fileText(f)]));
   const toolResults: ToolResultPart[] = [];
   // The SDK answers invalid tool calls itself (a tool-error result in the response
   // messages). Each tool call must have exactly one result, so skip those.
@@ -267,6 +268,7 @@ async function executeTool(
       const path = String(args.path);
       const content = files.get(path);
       if (content === undefined) throw new Error(`file not found: ${path}`);
+      if (content.startsWith(BINARY)) return { path, binary: true, note: 'binary file; it cannot be read or edited' };
       return { path, sha256: await digestBytes(content), content: bounded(content) };
     }
     case 'search_files': {
@@ -274,7 +276,7 @@ async function executeTool(
       const prefix = String(args.prefix ?? '');
       const matches: string[] = [];
       for (const [path, content] of [...files].sort(([a], [b]) => (a < b ? -1 : 1))) {
-        if (!path.startsWith(prefix)) continue;
+        if (!path.startsWith(prefix) || content.startsWith(BINARY)) continue;
         content.split('\n').forEach((line, i) => {
           if (matches.length < 100 && line.includes(query)) matches.push(`${path}:${i + 1}: ${line.slice(0, 200)}`);
         });
@@ -288,6 +290,7 @@ async function executeTool(
         if (matchesAny(task.forbiddenPaths, e.path)) throw new Error(`PROTECTED_PATH ${e.path} is protected`);
         if (!matchesAny(task.editablePaths, e.path)) throw new Error(`OUT_OF_SCOPE_EDIT ${e.path} is outside your editable paths`);
         const current = files.get(e.path);
+        if (current?.startsWith(BINARY)) throw new Error(`OUT_OF_SCOPE_EDIT ${e.path} is a binary file`);
         const currentDigest = current === undefined ? null : await digestBytes(current);
         if (currentDigest !== e.expectedSha256) throw new Error(`stale edit for ${e.path}: expected ${e.expectedSha256}, current ${currentDigest}; re-read the file`);
       }
@@ -390,8 +393,23 @@ async function bundleOf(input: AgentInput, files: Map<string, string>): Promise<
   return {
     schemaVersion: 1,
     baselineSha: input.baseSha,
-    files: await Promise.all([...files].sort(([a], [b]) => (a < b ? -1 : 1)).map(async ([path, utf8]) => ({ path, utf8, sha256: await digestBytes(utf8) }))),
+    files: await Promise.all(
+      [...files]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(async ([path, text]) => {
+          if (!text.startsWith(BINARY)) return { path, utf8: text, sha256: await digestBytes(text) };
+          const base64 = text.slice(BINARY.length);
+          return { path, utf8: '', base64, sha256: await digestBytes(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))) };
+        }),
+    ),
   };
+}
+
+/** Workspace map value for a binary file. Edits cannot hold NUL, so the marker cannot collide with text. */
+const BINARY = '\0base64:';
+
+function fileText(f: SourceFile): string {
+  return f.base64 === undefined ? f.utf8 : `${BINARY}${f.base64}`;
 }
 
 async function persistBundle(ctx: JobContext, input: AgentInput, baselineSha: string, files: Map<string, string>) {

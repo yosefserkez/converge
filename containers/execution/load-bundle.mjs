@@ -83,6 +83,7 @@ async function main() {
     if (seen.has(key)) fail(`duplicate path ${file.path}`);
     seen.add(key);
     if (typeof file.utf8 !== 'string') fail(`utf8 missing for ${file.path}`);
+    if (file.base64 !== undefined) fail(`binary file not supported: ${file.path}`);
     if (typeof file.sha256 !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(file.sha256)) fail(`invalid digest for ${file.path}`);
     const bytes = Buffer.from(file.utf8, 'utf8');
     if (sha256(bytes) !== file.sha256) fail(`digest mismatch for ${file.path}`);

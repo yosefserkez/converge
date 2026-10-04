@@ -107,17 +107,15 @@ describe('materialize', { timeout: 30_000 }, () => {
     ).rejects.toMatchObject({ code: 'LIMIT_EXCEEDED' });
   });
 
-  it('rejects binary and non-UTF-8 files', async () => {
+  it('carries binary and non-UTF-8 files as base64 with a digest over the raw bytes', async () => {
     const repo = fx.bare('bin');
-    const bin = commitRaw(repo.dir, 'main', [{ path: 'img.bin', content: Buffer.from([0x89, 0x50, 0x00, 0x01]) }]);
-    await expect(fx.broker.materialize({ remote: repo.url, token: FAKE_TOKEN, sha: bin })).rejects.toMatchObject({
-      code: 'INVALID_INPUT',
-    });
+    const raw = Buffer.from([0x89, 0x50, 0x00, 0x01]);
+    const bin = commitRaw(repo.dir, 'main', [{ path: 'img.bin', content: raw }]);
+    const bundle = await fx.broker.materialize({ remote: repo.url, token: FAKE_TOKEN, sha: bin });
+    expect(bundle.files).toEqual([{ path: 'img.bin', utf8: '', base64: raw.toString('base64'), sha256: `sha256:${createHash('sha256').update(raw).digest('hex')}` }]);
     const latin1 = commitRaw(repo.dir, 'other', [{ path: 'l.txt', content: Buffer.from([0x63, 0x61, 0x66, 0xe9]) }]);
-    await expect(fx.broker.materialize({ remote: repo.url, token: FAKE_TOKEN, sha: latin1 })).rejects.toMatchObject({
-      code: 'INVALID_INPUT',
-      message: expect.stringContaining('UTF-8'),
-    });
+    const lb = await fx.broker.materialize({ remote: repo.url, token: FAKE_TOKEN, sha: latin1 });
+    expect(lb.files[0]).toMatchObject({ path: 'l.txt', utf8: '', base64: Buffer.from([0x63, 0x61, 0x66, 0xe9]).toString('base64') });
   });
 
   it('reports a missing commit as NOT_FOUND', async () => {
