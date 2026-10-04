@@ -21,7 +21,9 @@ Converge is a competition prototype for one synthetic project. This document lis
 3. **Git broker container (trusted Git zone).** It accepts named operations only. It runs `git` with argv arrays, a controlled environment, hooks disabled, no global or system config, redirects disabled, and a remote allowlist. Credentials go into `GIT_CONFIG_*` environment entries of each child process, never into argv, URLs, logs, or results. It never runs candidate code, package scripts, or dependency installs. A fresh per-start secret protects its port.
 4. **Execution containers (untrusted).** Candidate code runs here with no Internet access and no secrets. Results from inside (stdout, files, exit codes) are data, not authority. The harness talks to the app from outside over the fixed private port and builds every check result itself. A hard timeout destroys the whole container, so child processes cannot keep running.
 5. **Preview gateway (public, separate origin).** It reaches the control plane only through the `PreviewEntrypoint` service binding, which resolves already-allocated previews and published replays. It cannot create sessions, call models, approve, or promote. It verifies the HMAC capability, expiry, candidate, and nonce. It strips cookies, Access headers, and authorization; forwards only `GET` and `POST /api/quote` with a narrow body; blocks `/__*` diagnostic paths; and drops `Set-Cookie`, redirects, and service-worker headers from responses. It applies a restrictive CSP, `no-referrer`, and `no-store`.
-6. **Models.** Prompts, files, tool output, and peer messages are untrusted text. Tool authorization is enforced in code: edits must match the task's editable paths and avoid protected paths, and each edit must name the prior digest. No tool can approve, promote, read secrets, fetch arbitrary URLs, or run a shell.
+6. **Prep container (project mode, trusted install).** It has Internet access and no secrets. It installs only the frozen lockfile from the baseline commit, runs the registry prep build, and is snapshotted, then destroyed. Agents cannot change the lockfile or package manifests (protected), so they cannot change what this container installs.
+7. **Deploy target (project mode).** Workers Builds, or the operator's own wrangler, deploys canonical `main`. Converge holds no deploy token. The deploy observer only sends HTTP requests to the public deploy URL.
+8. **Models.** Prompts, files, tool output, and peer messages are untrusted text. Tool authorization is enforced in code: edits must match the task's editable paths and avoid protected paths, and each edit must name the prior digest. No tool can approve, promote, read secrets, fetch arbitrary URLs, or run a shell.
 
 ## Controls against specific attacks
 
@@ -38,6 +40,9 @@ Converge is a competition prototype for one synthetic project. This document lis
 | Anonymous replay viewer starts paid work | The gateway exposes only replay reads and allocated previews. A preview cannot start without an operator allocation and cannot extend its absolute expiry. |
 | Secret leakage in logs or replay | The broker redacts tokens. Replay publication is a whitelist transformation that also scrubs token-shaped strings. No secret is in `VITE_*`, frontend bundles, or fixtures. |
 | Cross-site request forgery | Origin allowlist, JSON-only bodies, custom header requirement. |
+| Agent edits the project registry, setup files, or protected upstream tests | The registry and setup files live in the Converge repository, not in the project. Setup files and upstream tests are protected paths, listed one by one so agent test folders stay editable. |
+| Install scripts in a dependency | They run only in the prep container, with no secrets, from integrity-pinned lockfile entries. Candidates run offline from the snapshot. |
+| Agent edits a binary file | Binary files reach the agent only as a marker. Read and edit tools refuse them. |
 
 ## Known limits
 
@@ -46,4 +51,6 @@ Converge is a competition prototype for one synthetic project. This document lis
 - The demo customer header (`X-Demo-Customer`) selects a synthetic identity. It is not an authentication pattern.
 - One active mutating session per project. The coordinator is a single Durable Object; this is not a SaaS tenancy design.
 - The model ceiling is an application-level estimate. Network retries can cause extra billed requests; ambiguous outcomes are booked as uncertain charges, not as free.
+- In project mode, the project's own test suite runs inside the untrusted container. Its result (`paste.regression`) is in-container evidence; the black-box checks remain the authority.
+- Local `wrangler dev` has one consistent store. It cannot show production behavior such as KV eventual consistency. Only the production check after deploy can catch that.
 - The broker container has outbound Internet so it can reach Artifacts. A compromise of the broker image would expose the short-lived tokens of in-flight operations.

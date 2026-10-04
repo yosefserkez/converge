@@ -72,6 +72,20 @@ Or roll back the Worker version in place: `pnpm --filter @converge/control exec 
 
 The three-task preset needs the original baseline. After a promotion, canonical main no longer equals that baseline, and the coordinator refuses to start the preset. To record a new run, stop all jobs, change `PROJECT_SLUG` (for example `storefront-2`) in the env config, deploy, and seed. The new slug gets its own coordinator and canonical repository; the old project stays readable through its published replays.
 
+## Project mode
+
+Run a registry project (for example `projects/pastebin/`) on dev:
+
+1. Create the target Worker's resources in the account. For pastebin: KV namespace `pb-converge` and R2 bucket `pb-converge`. Put their IDs in `projects/pastebin/setup/wrangler.toml`.
+2. In `apps/control/wrangler.dev.jsonc`, set `PROJECT_KIND` to `pastebin` and `PROJECT_SLUG` to a new slug (for example `pastebin-3`).
+3. Run `pnpm deploy:dev`, then `pnpm seed --env dev`. The seed imports upstream, writes the setup commit to `main`, and builds the dependency snapshot (about 2 minutes). If the seed script stops waiting after 10 minutes, run it again. It reports the existing job.
+4. Deploy the baseline once, so the target Worker and its bindings exist: check out the pinned commit, copy `projects/<slug>/setup/` over it, run `pnpm install --frozen-lockfile` and `pnpm build:frontend`, then `npx wrangler deploy --tag <first 12 characters of the setup commit>`. Check `curl -sI <deploy URL>` for `X-Converge-Version`.
+5. Connect Workers Builds to the canonical repository (dashboard: **Workers & Pages → <worker> → Settings → Builds → Connect**). Choose the Artifacts namespace and `cv-<slug>-b-main`. Set the build command to `pnpm build:frontend`. Set the deploy command to `npx wrangler deploy --tag $(echo $WORKERS_CI_COMMIT_SHA | cut -c1-12)`. The Builds API needs a user-scoped token, so do this in the dashboard.
+6. Start a session: `node --experimental-strip-types scripts/dev/session.ts live 5` (or `fixture`). When an agent reaches the turn limit, `scripts/dev/retry.ts <session>` continues it from its last turn.
+7. Promote: `node --experimental-strip-types scripts/dev/promote.ts <session>`. Converge then waits for the deployed version and records the production check (`deploy.*` event).
+
+Until Workers Builds is connected, deploy the promoted commit yourself. Create a short-lived read token (`POST /artifacts/namespaces/<ns>/tokens`, `scope: read`, `ttl: 600`). Clone with `git -c http.extraHeader="Authorization: Bearer <token>"`, then check out `origin/main`. Revoke the token. Build and run `wrangler deploy --tag <12-character sha>` from the clone. Do this within 10 minutes of promotion, while the observer still polls.
+
 ## Cleanup
 
 ```sh

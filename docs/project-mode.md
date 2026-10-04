@@ -1,6 +1,6 @@
 # Project mode: real open-source projects
 
-Status: fixture run passes on dev; deploy connection pending. Requested by the operator on 2026-10-03 for the final demonstration. This expands the first-release scope (the brief excluded arbitrary repository import). It stays narrow: a **curated project registry**, not "import any repository".
+Status (2026-10-04): fixture and live runs pass on dev. The promoted live result failed the production check (KV consistency). Setup v2 with a Durable Object view count is seeded as `pastebin-2`; no run on it has finished. Workers Builds is not connected yet. Requested by the operator on 2026-10-03 for the final demonstration. This expands the first-release scope (the brief excluded arbitrary repository import). It stays narrow: a **curated project registry**, not "import any repository".
 
 ## Goal
 
@@ -56,6 +56,21 @@ Expected interaction: Storage changes `paste.read-side-effects` from `none` to `
 | `views.cache-safety` | view-limits | Limited pastes send `Cache-Control: no-store` and never answer `304` |
 | `delivery.conditional` | conditional-get | Unlimited pastes send a strong `ETag`; a matching `If-None-Match` gets `304`; public caching stays |
 | `views.display` | view-limits-ui | The display page and metadata show the remaining views |
+
+## Setup v2: Durable Object view count (`pastebin-2`)
+
+| Setup file | Change |
+|---|---|
+| `wrangler.toml` | `VIEW_COUNTER` Durable Object binding (class `ViewCounter`) and migration `converge-v1-view-counter` |
+| `worker/converge-env.d.ts` (protected) | Adds `VIEW_COUNTER` to `Env`; the generated `worker-configuration.d.ts` stays unchanged |
+| `worker/index.ts` | Exports `ViewCounter` |
+| `worker/storage/viewCounter.ts` | Empty class; the storage task implements it |
+
+The storage objective now says: do not keep the view count in KV; use one `ViewCounter` object per paste; use a view in one call; use the view inside `getPaste`, which `handleRead.ts` already calls. The first version of this wording did not name `getPaste`. The storage agent then reported a correct blocker (it cannot edit `handleRead.ts`), and the wording was fixed.
+
+Checked locally: `tsc` clean, upstream suite 156/156, the pastebin harness tests 15/15. The fixture patches still keep the count in KV.
+
+Registry fields added during the runs: `repairPaths` (a repair may edit `worker/test/converge/repair/**`) and `--testTimeout=120000` on the test commands (a 40 MB upload test takes longer than the 5 s default on a `standard-1` container).
 
 ## Workers Builds connection (one time, dashboard)
 

@@ -11,6 +11,8 @@ Read `README.md` and `docs/architecture.md` first. Keep these rules.
 - The protected harness runs outside candidate containers and builds results itself. Candidate output is data, never evidence.
 - A skipped check is not a pass. A zero-assertion check is not a pass. Prior failures stay visible.
 - Approval pins one exact head and validation digest. Promotion pushes that exact commit with an ancestry proof and an explicit lease. Never squash, rebase, or re-merge after approval.
+- Candidates of registry projects restore the dependency snapshot with Internet off. Only the prep container installs, with Internet and no secrets.
+- The production check after deploy is evidence. Never let it change `main` or roll back on its own.
 - Never fabricate model calls, commits, test results, costs, or URLs. Label live, fixture, and replay modes truthfully.
 
 ## Working rules
@@ -22,6 +24,7 @@ Read `README.md` and `docs/architecture.md` first. Keep these rules.
 - Schema changes go in a new numbered file in `migrations/`. Never edit an applied migration.
 - Copy in the UI, docs, code comments, and commit messages follows ASD-STE100 (short sentences, active voice, plain words).
 - Commit messages carry no AI attribution trailers.
+- A registry project lives in `projects/<slug>/`. Setup files and upstream tests are protected paths; list upstream tests one by one so agent test folders stay editable.
 
 ## Commands
 

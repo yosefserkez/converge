@@ -55,7 +55,7 @@ Long work (Git, model calls, tests, HTTP) never runs inside a SQL transaction.
 
 ## Jobs, attempts, and fences
 
-`createJob` allocates attempt 1 with fence 1 and queues an outbox dispatch. The workflow instance ID is `<job>-a<attempt>`. The first workflow step leases the attempt; every later callback sends job and fence. Cancellation bumps the fence first, so a late callback from the old attempt gets `STALE_FENCE` and changes nothing. A retry is a new attempt with a larger fence. Billing reconciliation from an old attempt is still recorded, because spend is a fact even when the domain result is stale.
+`createJob` allocates attempt 1 with fence 1 and queues an outbox dispatch. The workflow instance ID is `<job>-a<attempt>`. The first workflow step leases the attempt; every later callback sends job and fence. Cancellation bumps the fence first, so a late callback from the old attempt gets `STALE_FENCE` and changes nothing. A retry is a new attempt with a larger fence and a fresh deadline of the same length as the first, so a late retry does not expire at lease. Billing reconciliation from an old attempt is still recorded, because spend is a fact even when the domain result is stale.
 
 ## Candidates and repairs
 
@@ -76,6 +76,21 @@ A prediction becomes `confirmed` only when a combined candidate fails a protecte
 ## Agents
 
 Three agent jobs run as independent workflow instances with separate contexts and workspaces. Each durable step is one model turn: reserve budget, call the model, settle usage, run the requested tools one at a time, and checkpoint the workspace bundle and provider messages to R2. A workspace is a verified source bundle; file tools act on it in the Worker, and checks load it into a fresh offline execution container. Fixture agents apply checked-in patches through the same seal and verification pipeline and are labelled "Fixture agents - no model calls".
+
+Each model call marks its last message as a prompt-cache breakpoint (on a copy, so stored history never collects breakpoints). Later turns read the system prompt, tools, and history from the cache. The ledger prices cache reads and writes separately. After each turn, the coordinator stores the agent state (evidence references and counters) per proposal. A new attempt for the same proposal and base continues from that state with a fresh turn budget, so the turn limit does not throw away work.
+
+## Project mode
+
+A registry entry (`projects/<slug>/project.json`) gives the source URL and pinned commit, setup files, runtime commands, protected paths, tasks, baseline facts, the check suite, and the deploy URL. `apps/control/worker/projects.ts` loads every entry at build time. `PROJECT_KIND` selects one.
+
+- **Seed:** `ARTIFACTS.import()` takes the upstream default branch. The broker then creates `main` as one deterministic setup commit on the pinned commit.
+- **Dependency snapshot:** a prep execution container with Internet and no secrets installs from the frozen lockfile, runs the prep build, and calls `snapshotContainer()`. The coordinator stores the snapshot ID. Each agent and verify job first configures its execution container with that snapshot, and candidates restore it with Internet off.
+- **Bundles:** text files carry `utf8`; binary files carry `base64`. Imported projects use larger materialize bounds (1 MiB per file, 16 MiB in total).
+- **Verification:** the black-box suite runs against the candidate's `wrangler dev` from outside the container. The project's own Vitest suite runs inside it and becomes `paste.regression`, recorded as in-container evidence.
+- **Deploy observation:** after a successful promotion, the promote job reads `X-Converge-Version` from the deploy URL until it matches the promoted commit (40 polls, 15 s apart). Then it runs the protected checks against production. The coordinator records `deploy.verified`, `deploy.version-mismatch`, or `deploy.checks-failed` with evidence. This is evidence only; the guarded push already decided `main`.
+- **Previews:** not available. The project's absolute asset paths break under the preview prefix.
+
+The git broker stores the image it started with. When a deploy ships a new broker image, the next operation replaces the running container.
 
 ## Previews and replays
 

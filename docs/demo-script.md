@@ -19,4 +19,17 @@ Before you record:
 | 6:30–7:15 | Promote; promotion result; main SHA equals the approved SHA | Promotion pushes that exact commit with a lease on the expected main. If main moved, it stops and asks for review. |
 | 7:15–8:00 | Architecture slide (Workers, Durable Object coordinator, Workflows, Artifacts, broker and execution containers, R2), limits, the public replay | Limits: checks are evidence of specified behavior, not a proof. The storefront is synthetic. The code is MIT; the README lets you run it in your own account. |
 
+## Optional: real project (pastebin-worker)
+
+Show it after the storefront, or in place of the architecture slide.
+
+| Show | Say |
+|---|---|
+| The pastebin project page: goal, three tasks, protected checks | Same platform, real MIT project. Converge imported it at a pinned commit and installed dependencies once in a trusted container. |
+| Matrix row "View-limited storage + Conditional reads": failed `views.cache-safety`; the counterexample (read 2 gets `304`, read 3 still gets the content) | Each change passes alone. Together, a conditional read skips the view count. The project's own 156 tests stay green; only the black-box check finds it. |
+| The repair and the final candidate passing all six checks | The repair stops `304` answers for limited pastes. |
+| The `deploy.*` event after promotion, with the deployed version | Converge waits until production reports the promoted commit, then runs the same checks against production. |
+
+If you show the `deploy.checks-failed` result from the KV run, say what it found: local checks passed, but KV is eventually consistent in production. The fix keeps the count in a Durable Object.
+
 If the live run avoids the bug (an agent reacts to the predicted interaction), say so and show the prevention. Then use the fixture session for the counterexample. Do not present fixture output as live.

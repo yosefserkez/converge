@@ -4,7 +4,7 @@ Converge is an intent-aware integration platform for coding agents that work at 
 
 You review a verified result. You do not relay messages between agents.
 
-> Competition prototype for the Cloudflare "Build the next Git platform" challenge. One synthetic TypeScript project. MIT licensed. No real customer data.
+> Competition prototype for the Cloudflare "Build the next Git platform" challenge. A synthetic TypeScript storefront, plus one curated real open-source project ([SharzyL/pastebin-worker](https://github.com/SharzyL/pastebin-worker)). MIT licensed. No real customer data.
 
 ## The demonstration
 
@@ -48,10 +48,12 @@ apps/control      control Worker (worker/) and operator UI (src/)
 apps/preview      preview and replay gateway Worker and replay UI
 packages/domain   schemas, canonical hashing, intents, planning, transitions, budget, validation
 packages/infrastructure/src/git   trusted Git broker operations
-packages/verification             protected harness and fixture patch loader
+packages/verification             protected harness (storefront and pastebin suites) and fixture patch loader
 fixtures/storefront               synthetic project baseline (pushed to Artifacts)
 fixtures/deterministic            fixture agents A, B, C and the repair
-containers/                       execution and broker images
+fixtures/projects/<slug>          fixture agents for registry projects
+projects/<slug>                   curated project registry: project.json and operator setup files
+containers/                       execution, project runtime, and broker images
 migrations/                       coordinator SQLite schema
 scripts/                          preflight, provision, deploy, seed, smoke, cleanup
 docs/                             architecture, decisions, deployment, threat model, demo, status
@@ -108,6 +110,12 @@ pnpm cleanup --env dev --apply --keep <sessionId-to-retain>
 
 Cleanup deletes only this project's session repositories. It keeps the canonical repository, evidence, approvals, and published replays.
 
+## Project mode: a real open-source project
+
+Converge can also run on a curated real project. The registry entry `projects/pastebin/` imports pastebin-worker at a pinned commit and adds one operator setup commit. A trusted container installs dependencies once and snapshots them, so candidates run offline. Three agents build view-limited pastes. After promotion, Converge waits until the deployed Worker reports the promoted commit, then runs the protected checks against production.
+
+To run it, set `PROJECT_KIND` to `pastebin` and set a new `PROJECT_SLUG` in `apps/control/wrangler.dev.jsonc`, then deploy and seed. Design, results, and limits: [`docs/project-mode.md`](docs/project-mode.md). Steps: [`docs/deployment.md`](docs/deployment.md#project-mode).
+
 ## Platform dependencies
 
 - Cloudflare Containers with the `durable_object` scheduling policy (public beta).
@@ -116,7 +124,7 @@ Cleanup deletes only this project's session repositories. It keeps the canonical
 
 ## Limits
 
-The protected checks are evidence of specified behavior, not a proof against a deliberately adversarial implementation. One active mutating session per project. The `X-Demo-Customer` header selects a synthetic identity and is not an authentication pattern. "Promoted" means canonical main points to the approved commit; it does not deploy an application.
+The protected checks are evidence of specified behavior, not a proof against a deliberately adversarial implementation. One active mutating session per project. The `X-Demo-Customer` header selects a synthetic identity and is not an authentication pattern. "Promoted" means canonical main points to the approved commit. For the storefront, nothing deploys. For a registry project, Workers Builds (or the operator) deploys main, and Converge records a production check as evidence.
 
 ## License
 
