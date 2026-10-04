@@ -1,16 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
-  ALL_CAPABILITIES,
-  BASELINE_FACTS,
-  CHECKS,
   type CandidateManifest,
   ChangeIntent,
   type CheckResult,
   DomainError,
   type EvidenceRef,
-  PROTECTED_PATHS,
-  STOREFRONT_GOAL,
-  STOREFRONT_TASKS,
   REPAIR_OBJECTIVE,
   type TaskSpec,
   type ValidationManifest,
@@ -35,9 +29,12 @@ import {
   type Json,
   type BaselineFacts,
   type CheckStatus,
+  type Capability,
+  type CheckDefinition,
 } from '@converge/domain';
-import { harnessDigest, resultInvariantViolations } from '@converge/verification';
+import { resultInvariantViolations } from '@converge/verification';
 import { loadConfig } from '../config.ts';
+import { harnessDigestFor, projectDefinition } from '../projects.ts';
 import { Db, json, migrate, parse } from './db.ts';
 import type { CandidateRow, CheckRunRow, ProjectPolicy, ProjectRow, ProposalRow, RevisionRow, SessionPolicy, SessionRow } from './model.ts';
 import { ACTIVE_SESSION_STATES } from './model.ts';
@@ -52,6 +49,8 @@ import {
   initialPlanInputs,
   insertCandidate,
   isFullGoal,
+  sessionFullGoal,
+  sessionProject,
   latestRevision,
   latestRuns,
   proposalsOf,
@@ -290,14 +289,16 @@ export class ProjectCoordinator extends DurableObject<Env> {
       }
     }
     const now = Date.now();
-    const tasks: TaskSpec[] = STOREFRONT_TASKS.map((t) => ({ ...t, baselineSha: mainSha }));
+    const def = projectDefinition(cfg.PROJECT_KIND);
+    const tasks: TaskSpec[] = def.tasks.map((t) => ({ ...t, baselineSha: mainSha }));
     const environmentDigest = await digestOf({ lockfileDigest: projectPolicy.lockfileDigest, verifierBuildId: cfg.BUILD_ID, image: 'workspace' });
     const policy: SessionPolicy = {
+      projectKind: def.kind,
       maxCandidates: cfg.MAX_CANDIDATES_PER_SESSION,
       maxRepairAttempts: cfg.MAX_REPAIR_ATTEMPTS,
       maxAgentTurns: cfg.MAX_AGENT_TURNS,
-      fullGoalCapabilities: [...ALL_CAPABILITIES],
-      protectedPaths: [...PROTECTED_PATHS],
+      fullGoalCapabilities: [...def.fullGoalCapabilities],
+      protectedPaths: [...def.protectedPaths],
       lockfileDigest: projectPolicy.lockfileDigest,
       environmentDigest,
       expectedMainSha: mainSha,
@@ -307,7 +308,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const [taskSetDigest, policyDigest, harness, taskDigests] = await Promise.all([
       digestOf(tasks),
       digestOf(policy),
-      harnessDigest(),
+      harnessDigestFor(def.suite),
       Promise.all(tasks.map((t) => digestOf(t))),
     ]);
     this.db.tx(() => {
@@ -317,12 +318,12 @@ export class ProjectCoordinator extends DurableObject<Env> {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'created', ?, ?)`,
         sessionId,
         project.id,
-        STOREFRONT_GOAL,
+        def.goal,
         mode,
         mainSha,
         json(tasks),
         taskSetDigest,
-        json(BASELINE_FACTS),
+        json(def.baselineFacts),
         json(policy),
         policyDigest,
         harness,
@@ -547,7 +548,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
       objective: REPAIR_OBJECTIVE,
       capabilityIds: [],
       editablePaths: editable,
-      forbiddenPaths: [...PROTECTED_PATHS],
+      forbiddenPaths: [...sessionProject(session).protectedPaths],
       requiredCheckIds: [...new Set(memberProposals.flatMap((p) => taskOf(p).requiredCheckIds))],
       preservedInvariantIds: [...new Set(memberProposals.flatMap((p) => taskOf(p).preservedInvariantIds))],
       baselineSha: failed.head_sha,
@@ -960,7 +961,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
       manifestDigest: c.manifest_digest,
       validationDigest: c.validation_digest,
       promotable: c.promotable === 1,
-      fullGoal: isFullGoal(caps),
+      fullGoal: isFullGoal(caps, sessionFullGoal(getSession(this.db, c.session_id))),
       capabilities: [...caps],
       anchorCandidateId: c.anchor_candidate_id,
       members: candidateMembers(this.db, c.id),
@@ -1411,7 +1412,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
     if (result.harnessDigest !== session.harness_digest) {
       throw new DomainError('INVALID_INPUT', 'check result was produced by a different harness');
     }
-    const required = CHECK_REQUIRED(result.checkId, candidateCapabilities(this.db, c.id));
+    const required = CHECK_REQUIRED(result.checkId, candidateCapabilities(this.db, c.id), sessionProject(session).checks);
     // Reject an inconsistent result here. INSERT OR IGNORE below would drop it without a trace,
     // and a skip of a check that applies must never count as a pass.
     const problems = resultInvariantViolations(result);
@@ -1452,7 +1453,8 @@ export class ProjectCoordinator extends DurableObject<Env> {
     const session = getSession(this.db, c.session_id);
     const caps = candidateCapabilities(this.db, c.id);
     const runs = latestRuns(this.db, c.id);
-    const applicable = applicableChecks(caps);
+    const project = sessionProject(session);
+    const applicable = applicableChecks(caps, project.checks);
     const anyBad = runs.some((r) => r.applicable === 1 && (r.status === 'failed' || r.status === 'error'));
     // Every check the policy applies needs an applicable, passed run. A skip or a missing run is not a pass.
     const unmet = applicable.some((chk) => {
@@ -1461,14 +1463,14 @@ export class ProjectCoordinator extends DurableObject<Env> {
     });
     const to = buildError || anyBad || unmet ? 'failed' : 'passed';
     let validation: { manifest: ValidationManifest; digest: string; ref: EvidenceRef } | null = null;
-    if (to === 'passed' && isFullGoal(caps)) {
+    if (to === 'passed' && isFullGoal(caps, sessionFullGoal(session))) {
       const built = buildValidationManifest({
         candidate: { id: c.id, headSha: c.head_sha!, manifestDigest: c.manifest_digest! },
         policyDigest: session.policy_digest,
         harnessDigest: session.harness_digest,
-        checks: CHECKS,
+        checks: project.checks,
         capabilities: caps,
-        fullGoalCapabilities: [...ALL_CAPABILITIES],
+        fullGoalCapabilities: [...sessionFullGoal(session)] as Capability[],
         runs: runs.map((r) => ({
           checkId: r.check_key,
           status: r.status as CheckStatus | 'pending',
@@ -1949,8 +1951,8 @@ export class ProjectCoordinator extends DurableObject<Env> {
   }
 }
 
-function CHECK_REQUIRED(checkId: string, caps: Set<import('@converge/domain').Capability>): boolean {
-  return applicableChecks(caps).some((c) => c.id === checkId);
+function CHECK_REQUIRED(checkId: string, caps: Set<Capability>, checks: readonly CheckDefinition[]): boolean {
+  return applicableChecks(caps, checks).some((c) => c.id === checkId);
 }
 
 /**

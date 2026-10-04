@@ -17,7 +17,7 @@ export const SEED_TIMESTAMP = 1_790_000_000;
 
 // Deterministic fixture agents: checked-in full-file replacements + intents.
 // Labelled "Fixture agents - no model calls" everywhere they surface.
-const patchRaw = import.meta.glob('../../../fixtures/deterministic/*/**/*', {
+const patchRaw = import.meta.glob(['../../../fixtures/deterministic/*/**/*', '../../../fixtures/projects/*/*/**/*'], {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -31,8 +31,9 @@ export interface FixturePatch {
   summary: string;
 }
 
-export function loadFixturePatch(role: string): FixturePatch {
-  const base = `../../../fixtures/deterministic/${role}/`;
+export function loadFixturePatch(kind: string, role: string): FixturePatch {
+  // Storefront fixtures predate project mode and live in fixtures/deterministic.
+  const base = kind === 'storefront' ? `../../../fixtures/deterministic/${role}/` : `../../../fixtures/projects/${kind}/${role}/`;
   const manifestText = patchRaw[`${base}manifest.json`];
   if (!manifestText) throw new Error(`INVALID_INPUT no fixture patch for role ${role}`);
   const manifest = JSON.parse(manifestText) as { role: string; taskId: string; files: Record<string, string>; intent: unknown; summary: string };

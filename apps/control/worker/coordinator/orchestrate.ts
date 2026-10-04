@@ -1,11 +1,10 @@
 // Session progression rules. Each function runs synchronously inside a
 // coordinator transaction; digests are precomputed by the async caller.
 import {
-  ALL_CAPABILITIES,
   type Capability,
+  type CheckDefinition,
   type CandidatePlan,
   type ChangeIntent,
-  CHECKS,
   DomainError,
   type RevisionRef,
   type TaskSpec,
@@ -22,6 +21,7 @@ import {
 import { type Db, json, parse } from './db.ts';
 import type { CandidateRow, CheckRunRow, ProposalRow, RevisionRow, SessionPolicy, SessionRow } from './model.ts';
 import { appendEvent, createJob } from './store.ts';
+import { type ProjectDefinition, projectDefinition } from '../projects.ts';
 
 export const SYSTEM_ACTOR = 'system:coordinator';
 
@@ -486,8 +486,17 @@ function standaloneOutcome(db: Db, sessionId: string, proposalId: string, checkK
   return latestRuns(db, cand.id).find((r) => r.check_key === checkKey)?.status;
 }
 
-export function isFullGoal(caps: Set<Capability>): boolean {
-  return ALL_CAPABILITIES.every((c) => caps.has(c));
+/** The registry project a session runs. Sessions created before project mode are storefront. */
+export function sessionProject(session: Pick<SessionRow, 'policy_json'>): ProjectDefinition {
+  return projectDefinition(parse<SessionPolicy>(session.policy_json).projectKind ?? 'storefront');
+}
+
+export function isFullGoal(caps: Set<Capability>, fullGoal: readonly string[]): boolean {
+  return fullGoal.every((c) => caps.has(c as Capability));
+}
+
+export function sessionFullGoal(session: Pick<SessionRow, 'policy_json'>): readonly string[] {
+  return parse<SessionPolicy>(session.policy_json).fullGoalCapabilities;
 }
 
 export type NextStep =
@@ -508,7 +517,7 @@ export function decideNext(db: Db, session: SessionRow): NextStep {
   );
   if (busyCandidates || busyProposals) return { kind: 'wait' };
   const candidates = db.all<CandidateRow>('SELECT * FROM candidate WHERE session_id = ? ORDER BY created_at DESC', session.id);
-  const passedFull = candidates.find((c) => c.state === 'passed' && isFullGoal(candidateCapabilities(db, c.id)));
+  const passedFull = candidates.find((c) => c.state === 'passed' && isFullGoal(candidateCapabilities(db, c.id), sessionFullGoal(session)));
   if (passedFull) return { kind: 'ready', candidateId: passedFull.id };
   const policy = parse<SessionPolicy>(session.policy_json);
   const repairs = db.all<ProposalRow>("SELECT * FROM proposal WHERE session_id = ? AND kind = 'repair'", session.id);
@@ -533,6 +542,6 @@ export function decideNext(db: Db, session: SessionRow): NextStep {
 }
 
 /** Check catalog entries for a candidate's derived capabilities. */
-export function applicableChecks(caps: Set<Capability>) {
-  return CHECKS.filter((c) => !c.requires || caps.has(c.requires));
+export function applicableChecks(caps: Set<Capability>, checks: readonly CheckDefinition[]) {
+  return checks.filter((c) => !c.requires || caps.has(c.requires));
 }

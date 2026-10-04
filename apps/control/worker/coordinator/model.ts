@@ -37,6 +37,8 @@ export interface SessionRow extends Record<string, SqlStorageValue> {
 }
 
 export interface SessionPolicy {
+  /** Registry project; absent on sessions created before project mode (storefront). */
+  projectKind?: 'storefront' | 'pastebin';
   maxCandidates: number;
   maxRepairAttempts: number;
   maxAgentTurns: number;

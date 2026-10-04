@@ -10,7 +10,6 @@ import {
   estimateMaxCost,
   matchesAny,
   usageCost,
-  PROTECTED_PATHS,
 } from '@converge/domain';
 import { runSuite } from '@converge/verification';
 import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
@@ -156,7 +155,7 @@ async function runTurn(ctx: JobContext, input: AgentInput, task: TaskSpec, state
   try {
     result = await generateText({
       model: anthropic(config.MODEL_ID),
-      system: `${SHARED_SYSTEM_INSTRUCTION}\n\nYour editable paths: ${task.editablePaths.join(', ')}. Protected paths you must not edit: ${PROTECTED_PATHS.join(', ')}.`,
+      system: `${SHARED_SYSTEM_INSTRUCTION}\n\nYour editable paths: ${task.editablePaths.join(', ')}. Protected paths you must not edit: ${task.forbiddenPaths.join(', ')}.`,
       messages,
       tools,
       toolChoice: 'auto',
@@ -285,7 +284,7 @@ async function executeTool(
       const edits = (args.edits as Array<{ path: string; expectedSha256: string | null; content: string }>) ?? [];
       // Validate everything first so the edit is atomic.
       for (const e of edits) {
-        if (matchesAny([...task.forbiddenPaths, ...PROTECTED_PATHS], e.path)) throw new Error(`PROTECTED_PATH ${e.path} is protected`);
+        if (matchesAny(task.forbiddenPaths, e.path)) throw new Error(`PROTECTED_PATH ${e.path} is protected`);
         if (!matchesAny(task.editablePaths, e.path)) throw new Error(`OUT_OF_SCOPE_EDIT ${e.path} is outside your editable paths`);
         const current = files.get(e.path);
         const currentDigest = current === undefined ? null : await digestBytes(current);

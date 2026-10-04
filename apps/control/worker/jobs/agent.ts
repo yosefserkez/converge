@@ -1,4 +1,4 @@
-import { PROTECTED_PATHS, type SourceBundle, type TaskSpec } from '@converge/domain';
+import { type SourceBundle, type TaskSpec } from '@converge/domain';
 import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
 import { loadFixturePatch } from '../fixtures.ts';
 import { type JobContext, retrying } from './context.ts';
@@ -46,7 +46,7 @@ export async function materializeBaseline(ctx: JobContext, input: AgentInput): P
 
 /** Checked-in A/B/C/repair patches through the same seal + verification pipeline. No model calls. */
 async function runFixtureAgent(ctx: JobContext, input: AgentInput, baseline: { key: string; sha256: string }) {
-  const patch = loadFixturePatch(input.role);
+  const patch = loadFixturePatch(ctx.config.PROJECT_KIND, input.role);
   const startedAt = await ctx.step.do('declare fixture intent', retrying, async () => {
     const now = Date.now();
     await ctx.coordinator.wfActivity(ctx.lease.jobId, ctx.lease.fence, { id: `${ctx.lease.jobId}-fx`, kind: 'fixture', label: 'apply checked-in patch', startedAt: now });
@@ -110,7 +110,8 @@ export async function sealRevision(
           branch: `converge/${ctx.lease.jobId}`,
           files: edits,
           editablePaths: proposal.task.editablePaths,
-          protectedPaths: [...new Set([...proposal.task.forbiddenPaths, ...PROTECTED_PATHS])],
+          // The task's frozen forbiddenPaths come from the project registry.
+          protectedPaths: [...proposal.task.forbiddenPaths],
           message: `${proposal.task.title}: ${commitSubject(summary)}`,
           timestamp: Math.floor(startedAt / 1000),
           sourceRemote: source.remote,

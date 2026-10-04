@@ -85,7 +85,7 @@ export function buildSnapshot(db: Db, sessionId: string, config: AppConfig) {
       members: candidateMembers(db, c.id),
       anchorCandidateId: c.anchor_candidate_id,
       capabilities: [...caps],
-      fullGoal: isFullGoal(caps),
+      fullGoal: isFullGoal(caps, policy.fullGoalCapabilities),
       promotable: c.promotable === 1,
       validationDigest: c.validation_digest,
       manifestDigest: c.manifest_digest,
