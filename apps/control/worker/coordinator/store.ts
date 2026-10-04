@@ -73,6 +73,7 @@ export interface JobRow extends Record<string, SqlStorageValue> {
   lease_expires_at: number | null;
   workflow_id: string | null;
   deadline_at: number;
+  created_at: number;
   cancel_requested_at: number | null;
   error_code: string | null;
 }
@@ -129,12 +130,15 @@ export function queueAttempt(db: Db, jobId: string, now = Date.now()): JobRow {
   const attemptNo = job.attempt_no + 1;
   const fence = job.current_fence + 1;
   const workflowId = workflowIdFor(jobId, attemptNo);
+  // Each attempt gets the job's original time allowance from now; a retry after the first deadline must not expire at lease.
+  const deadlineAt = now + Math.max(0, job.deadline_at - job.created_at);
   db.run(
     `UPDATE job SET status = 'queued', attempt_no = ?, current_fence = ?, workflow_id = ?, lease_expires_at = NULL,
-       error_code = NULL, version = version + 1, updated_at = ? WHERE id = ?`,
+       error_code = NULL, deadline_at = ?, version = version + 1, updated_at = ? WHERE id = ?`,
     attemptNo,
     fence,
     workflowId,
+    deadlineAt,
     now,
     jobId,
   );
