@@ -78,6 +78,18 @@ Fixture session `ses_md2fn53dbtnf53567dmdqibyff` on project `pastebin-1`:
 | All three | failed `views.cache-safety` |
 | Full goal + Repair 1 `9e599e0` | passed all six checks |
 
+Live session `ses_frsuscfxw3clnpabyfbd5hssx2` (Haiku 4.5, prompt caching, turn checkpoints):
+
+| Candidate | Result |
+|---|---|
+| Storage alone, Conditional reads alone | passed |
+| Upload option and display alone | failed `views.display` |
+| Storage + Conditional reads | **failed `views.cache-safety`** |
+| Full goal + Repair 1 | failed `views.display` only |
+| Full goal + Repair 2 `93a80f0` | passed all six checks |
+
+Two agents reached the 30-turn limit. A retry resumed each one from its last saved turn.
+
 ## Limits
 
 - One curated project at a time. Adding a project means a reviewed registry entry and fixture/check work.
