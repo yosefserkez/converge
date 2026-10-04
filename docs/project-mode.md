@@ -1,6 +1,6 @@
 # Project mode: real open-source projects
 
-Status: in progress. Requested by the operator on 2026-10-03 for the final demonstration. This expands the first-release scope (the brief excluded arbitrary repository import). It stays narrow: a **curated project registry**, not "import any repository".
+Status: fixture run passes on dev; deploy connection pending. Requested by the operator on 2026-10-03 for the final demonstration. This expands the first-release scope (the brief excluded arbitrary repository import). It stays narrow: a **curated project registry**, not "import any repository".
 
 ## Goal
 
@@ -22,21 +22,21 @@ The registry lives in the Converge repository, so agents cannot change it.
 
 ## Pipeline changes
 
-1. **Seed = import + setup commit.** `ARTIFACTS.import()` the pinned upstream into the canonical repository (full history), then the broker commits the setup files on top of `main`. That commit is the session baseline.
+1. **Seed = import + setup commit.** `ARTIFACTS.import()` the upstream default branch into the canonical repository (pastebin-worker uses `goshujin`). The broker then creates `main` as one deterministic setup commit on the pinned commit. Workers Builds deploys only `main` from Artifacts. That commit is the session baseline.
 2. **Dependency snapshot (trusted prep, once per lockfile).** A prep execution container starts *with* Internet access and no secrets, materializes the baseline, runs the install command from the frozen lockfile, runs the prep build, and calls `snapshotContainer()`. The coordinator records the snapshot ID against the lockfile digest. Candidate containers start from that snapshot with Internet access **off**; the loader replaces source files and keeps `node_modules`. Agents cannot edit the lockfile or package manifests (protected).
-3. **Generic runtime image.** Node 24 + pnpm 10 (corepack) + the trusted loader and tool runner. Tools come from `project.json` (typecheck, unit, build, serve), never from agent input.
+3. **Generic runtime image.** Node 24, a global pinned pnpm 10.24.0 (corepack downloads a newer pnpm), and the trusted loader and tool runner. Binary files (for example `favicon.ico`) travel in bundles as base64; agents cannot read or edit them. Tools come from `project.json` (typecheck, unit, build, serve), never from agent input.
 4. **Protected checks.** Two kinds:
    - *Black-box HTTP checks* in `packages/verification/src/projects/<slug>/`, run by the trusted harness outside the container against the candidate's `wrangler dev` (offline, local KV/R2, fresh `--persist-to` directory per fresh instance). These decide the feature behavior.
    - *Regression suite*: the project's own Vitest suite inside the container, with protected test files. Recorded as in-container evidence (a lower trust level, stated in the UI and threat model).
-5. **Deploy verification.** After promotion, Workers Builds deploys `main`. A `deploy-verify` job polls the deployed URL until the deployed version reports the promoted commit (setup commit adds a version header from `CF_VERSION_METADATA`), then runs the black-box checks against production and stores the evidence.
+5. **Deploy verification.** After promotion, Workers Builds deploys `main`. A `deploy-verify` job polls the deployed URL until the deployed version reports the promoted commit (the setup commit adds `X-Converge-Version` from the version metadata binding), then runs the black-box checks against production and stores the evidence.
 
 ## View-limited pastes: agents and contracts
 
 | Agent | Owns | Objective |
 |---|---|---|
-| Storage | `worker/storage/**`, `shared/interfaces.ts` | Add `maxViews` and remaining views to paste metadata; consume a view on each content read; delete the paste after the last view |
-| API + UI | `worker/handlers/handleWrite.ts`, `shared/uploadPaste.ts`, `shared/parsers.ts`, `frontend/**` (not its build config), `worker/pages/**`, `doc/**`, `scripts/**` | Upload option (`views` form field / `--views`), remaining views on the display page and in metadata responses, docs, CLI |
-| Delivery | `worker/handlers/handleRead.ts`, `worker/ssrUtils.ts`, `worker/handlers/handleCors.ts` | Faster reads: strong `ETag`, `If-None-Match` → `304`, longer public caching |
+| Storage | `worker/storage/**`, `shared/interfaces.ts`, `worker/handlers/handleWrite.ts` | Add `maxViews` and remaining views to paste metadata; consume a view on each content read; delete the paste after the last view |
+| API + UI | `shared/uploadPaste.ts`, `shared/parsers.ts`, `frontend/**` (not its build config), `worker/pages/**`, `doc/**`, `scripts/**` | Upload option (`views` form field / `--views`), remaining views on the display page and in metadata responses, docs, CLI |
+| Delivery | `worker/handlers/handleRead.ts`, `worker/ssrUtils.ts`, `worker/handlers/handleCors.ts` | Faster reads: strong `ETag`, `If-None-Match` → `304`; public caching unchanged (a protected upstream test pins it) |
 
 Baseline facts:
 
@@ -56,6 +56,27 @@ Expected interaction: Storage changes `paste.read-side-effects` from `none` to `
 | `views.cache-safety` | view-limits | Limited pastes send `Cache-Control: no-store` and never answer `304` |
 | `delivery.conditional` | conditional-get | Unlimited pastes send a strong `ETag`; a matching `If-None-Match` gets `304`; public caching stays |
 | `views.display` | view-limits-ui | The display page and metadata show the remaining views |
+
+## Workers Builds connection (one time, dashboard)
+
+1. Go to **Workers & Pages → pb-converge → Settings → Builds → Connect**.
+2. Select the Artifacts namespace and the canonical repository (`cv-pastebin-1-b-main` on dev).
+3. Set the build command to `pnpm build:frontend`.
+4. Set the deploy command to `npx wrangler deploy --tag $(echo $WORKERS_CI_COMMIT_SHA | cut -c1-12)`.
+
+The tag becomes `X-Converge-Version`, so Converge can see which commit is live.
+
+## Run on dev (2026-10-04)
+
+Fixture session `ses_md2fn53dbtnf53567dmdqibyff` on project `pastebin-1`:
+
+| Candidate | Result |
+|---|---|
+| Baseline `92085c6` | passed (156 upstream tests) |
+| Each feature alone | passed |
+| Storage + Conditional reads | **failed `views.cache-safety`**; upstream suite green |
+| All three | failed `views.cache-safety` |
+| Full goal + Repair 1 `9e599e0` | passed all six checks |
 
 ## Limits
 

@@ -1,6 +1,6 @@
 # Build status
 
-Last update: 2026-10-03. This file records completed work, actual test outcomes, current blockers, and the next step. It states only what was run.
+Last update: 2026-10-04. This file records completed work, actual test outcomes, current blockers, and the next step. It states only what was run.
 
 ## Deployed (dev)
 
@@ -8,7 +8,10 @@ Last update: 2026-10-03. This file records completed work, actual test outcomes,
 |---|---|
 | Operator host (Access-protected) | https://converge-dev.converge-42.workers.dev |
 | Preview and replay host | https://converge-preview-dev.converge-42.workers.dev |
-| Canonical repository | `cv-storefront-b-main` in Artifacts namespace `converge-dev`. Baseline `da9b779`; main now `a663afc0f12a327dc4b39d515451001dd2e485a1` (promoted from the live run) |
+| Project | `pastebin-1` (`PROJECT_KIND=pastebin`); canonical repo `cv-pastebin-1-b-main`, main `92085c6` (setup commit on upstream `0835cac`) |
+| Deployed project | https://pb-converge.converge-42.workers.dev (baseline, `X-Converge-Version: 92085c63c006`) |
+| Pastebin fixture run | `ses_md2fn53dbtnf53567dmdqibyff` ready; repair candidate `9e599e0` passed all six checks |
+| Earlier storefront project | `cv-storefront-b-main`, main `a663afc` (promoted from the live run) |
 | Public replay (fixture run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_x6sgkwykc5ujbdgib32rjco54u |
 | Public replay (live run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_suwonabsqmruq2gq6pvnctj2vq |
 
@@ -64,7 +67,7 @@ The session was cancelled (not promoted) so the live run could use the preset ba
 
 ## Blockers
 
-None external. The account, Artifacts, Containers, Access, and the model key all work.
+- Workers Builds for `pb-converge` must be connected in the dashboard (needs a user-scoped token). See `docs/project-mode.md`.
 
 ## Open items
 
@@ -74,6 +77,6 @@ None external. The account, Artifacts, Containers, Access, and the model key all
 
 ## Next steps
 
-1. Merge the UI; run browser checks at desktop and mobile widths against dev.
-3. Fresh demo project for the video recording (main has moved).
-4. Publish the source repository (needs your approval of host and visibility); record the video.
+1. After the Workers Builds connection: approve and promote the pastebin repair candidate; confirm deploy verification.
+2. Live Haiku session on pastebin; promote and verify the deployed feature.
+3. Publish the source repository (needs your approval of host and visibility); record the video.
