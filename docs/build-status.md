@@ -8,8 +8,9 @@ Last update: 2026-10-04. This file records completed work, actual test outcomes,
 |---|---|
 | Operator host (Access-protected) | https://converge-dev.converge-42.workers.dev |
 | Preview and replay host | https://converge-preview-dev.converge-42.workers.dev |
-| Project | `pastebin-1` (`PROJECT_KIND=pastebin`); canonical repo `cv-pastebin-1-b-main`, main `92085c6` (setup commit on upstream `0835cac`) |
-| Deployed project | https://pb-converge.converge-42.workers.dev (baseline, `X-Converge-Version: 92085c63c006`) |
+| Project | `pastebin-2` (`PROJECT_KIND=pastebin`, setup v2 with the `VIEW_COUNTER` Durable Object); canonical repo `cv-pastebin-2-b-main`, main `027db44` (baseline, 156/156 upstream tests). No active session |
+| Earlier pastebin project | `pastebin-1`: canonical main `93a80f0` (live run, KV view count), deployed to pb-converge |
+| Deployed project | https://pb-converge.converge-42.workers.dev, version `93a80f0f682f` (feature with the KV consistency gap). The `VIEW_COUNTER` migration is not deployed yet |
 | Pastebin fixture run | `ses_md2fn53dbtnf53567dmdqibyff`: repair candidate `9e599e0` passed all six checks (cancelled to free the project for the live run) |
 | Pastebin production check | Promoted `93a80f0` (deployed by `wrangler deploy --tag` until Workers Builds is connected). Deploy observer: version matched, `views.limit` and `views.cache-safety` **failed in production** (KV eventual consistency). See `docs/project-mode.md` |
 | Pastebin live run (Haiku 4.5) | `ses_frsuscfxw3clnpabyfbd5hssx2` ready. Storage + Conditional reads failed `views.cache-safety`; Repair 1 fixed it; Repair 2 fixed `views.display`. Candidate `93a80f0f68` passed all six checks. Model spend about $1.90 |
@@ -79,6 +80,7 @@ The session was cancelled (not promoted) so the live run could use the preset ba
 
 ## Next steps
 
-1. After the Workers Builds connection: approve and promote the pastebin repair candidate; confirm deploy verification.
-2. Live Haiku session on pastebin; promote and verify the deployed feature.
-3. Publish the source repository (needs your approval of host and visibility); record the video.
+1. Run a live session on `pastebin-2` (Durable Object view count): `node --experimental-strip-types scripts/dev/session.ts live 5`. Retry turn-limit blocks with `scripts/dev/retry.ts <session>`. The last attempt `ses_f5qabg373rymgyv6dlqy6d6yfw` was cancelled at wrap-up ($1.78 spent; Conditional reads sealed).
+2. Promote, deploy (`wrangler deploy --tag <12-char sha>` until Workers Builds is connected to `cv-pastebin-2-b-main`), and confirm `deploy.verified`.
+3. Update the pastebin fixture patches to use the Durable Object view count (they still use KV).
+4. Publish the source repository (needs your approval of host and visibility); record the video.
