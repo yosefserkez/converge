@@ -57,7 +57,7 @@
     "MODEL_PROVIDER": "anthropic",
     "MODEL_ID": "claude-haiku-4-5",
     "MODEL_PRICE_SNAPSHOT": "{\"provider\":\"anthropic\",\"modelId\":\"claude-haiku-4-5\",\"inputMicroUsdPerMTok\":1000000,\"outputMicroUsdPerMTok\":5000000,\"cacheReadMicroUsdPerMTok\":100000,\"cacheWriteMicroUsdPerMTok\":1250000,\"capturedAt\":1790294400000}",
-    "LIVE_EXECUTION_ENABLED": "false",
+    "LIVE_EXECUTION_ENABLED": "true",
     "DEFAULT_MODEL_BUDGET_MICROUSD": "5000000",
     "MAX_CONCURRENT_AGENTS": "3",
     "MAX_ACTIVE_CONTAINERS": "6",
