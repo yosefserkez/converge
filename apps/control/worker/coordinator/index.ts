@@ -991,6 +991,15 @@ export class ProjectCoordinator extends DurableObject<Env> {
     return e;
   }
 
+  /** Runtime for execution containers of this project (snapshot for project mode). */
+  async getRuntime(): Promise<{ kind: 'storefront' } | { kind: 'project'; snapshotId: string }> {
+    const def = projectDefinition(this.config.PROJECT_KIND);
+    if (def.runtime.kind === 'storefront') return { kind: 'storefront' };
+    const snapshotId = parse<ProjectPolicy>(this.requireProject().policy_json).snapshotId;
+    if (!snapshotId) throw new DomainError('INVALID_STATE', 'the dependency snapshot is not ready; seed the project first');
+    return { kind: 'project', snapshotId };
+  }
+
   // =====================================================================
   // Preview gateway support (reached only through PreviewEntrypoint)
   // =====================================================================
@@ -1553,7 +1562,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
     });
   }
 
-  async wfSeeded(jobId: string, fence: number, r: { headSha: string; lockfileDigest: string }): Promise<void> {
+  async wfSeeded(jobId: string, fence: number, r: { headSha: string; lockfileDigest: string; snapshotId?: string | null }): Promise<void> {
     const now = Date.now();
     this.db.tx(() => {
       const j = assertFence(this.db, { jobId, fence });
@@ -1563,6 +1572,7 @@ export class ProjectCoordinator extends DurableObject<Env> {
         seededBaselineSha: policy.seededBaselineSha ?? r.headSha,
         lockfileDigest: policy.lockfileDigest ?? r.lockfileDigest,
         seedJobId: jobId,
+        snapshotId: r.snapshotId ?? policy.snapshotId ?? null,
       };
       this.db.run(
         'UPDATE project SET observed_main_sha = coalesce(observed_main_sha, ?), policy_json = ?, updated_at = ?',

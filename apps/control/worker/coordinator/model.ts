@@ -15,6 +15,8 @@ export interface ProjectPolicy {
   seededBaselineSha: string | null;
   lockfileDigest: string | null;
   seedJobId: string | null;
+  /** Project mode: dependency snapshot restored by candidate containers (offline). */
+  snapshotId?: string | null;
 }
 
 export interface SessionRow extends Record<string, SqlStorageValue> {

@@ -16,6 +16,14 @@ export class JobWorkflow extends WorkflowEntrypoint<Env, JobParams> {
     if (!lease) return { skipped: true };
     const ctx = makeContext(this.env, step, lease, params);
     try {
+      if (lease.kind === 'agent' || lease.kind === 'verify') {
+        // Pick the container runtime (storefront image or project snapshot) before first use.
+        await step.do('configure runtime', retrying, async () => {
+          const runtime = await coordinator.getRuntime();
+          await ctx.execution.configure(runtime);
+          return runtime;
+        });
+      }
       switch (lease.kind) {
         case 'seed':
           await runSeed(ctx);

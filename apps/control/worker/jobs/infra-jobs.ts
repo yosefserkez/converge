@@ -10,35 +10,87 @@ import {
 import { runSuite, type AppTarget } from '@converge/verification';
 import type { AssembleOutput } from '@converge/infrastructure/git/ops';
 import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
-import { SEED_TIMESTAMP, STOREFRONT_FILES } from '../fixtures.ts';
+import { type ProjectDefinition, projectDefinition } from '../projects.ts';
 import { type JobContext, once, retrying } from './context.ts';
 
 // ---------------- seed ----------------
 
 export async function runSeed(ctx: JobContext): Promise<void> {
-  const { lease, step, repos, broker, coordinator } = ctx;
+  const { step, coordinator, lease } = ctx;
   const canonicalRepo = String(ctx.input.canonicalRepo);
-  await step.do('ensure canonical repo', retrying, async () => {
-    await repos.ensureRepo(canonicalRepo, 'Converge canonical synthetic storefront (MIT, synthetic data only)');
+  const def = projectDefinition(ctx.config.PROJECT_KIND);
+  const headSha = def.seed.kind === 'files' ? await seedFromFiles(ctx, canonicalRepo, def) : await seedFromImport(ctx, canonicalRepo, def);
+  const baseline = await step.do('read baseline lockfile', retrying, async () => {
+    const lock = await ctx.repos.readFile(canonicalRepo, headSha, def.lockfile);
+    if (lock === null) throw new Error(`INVALID_STATE baseline has no ${def.lockfile}`);
+    return { lockfileDigest: await digestBytes(lock) };
+  });
+  let snapshotId: string | null = null;
+  if (def.runtime.kind === 'project') {
+    const runtime = def.runtime;
+    snapshotId = await step.do('prepare dependency snapshot', { retries: { limit: 1, delay: '10 seconds', backoff: 'constant' }, timeout: '20 minutes' }, async () => {
+      const bundle = await ctx.repos.withTokens([{ name: canonicalRepo, scope: 'read' }], (creds) => {
+        const c = creds.get(canonicalRepo)!;
+        return ctx.broker.materialize({ remote: c.remote, token: c.token, sha: headSha, maxTotalBytes: 16 * 1024 * 1024 });
+      });
+      // One prep container per lockfile: Internet on, no secrets, then snapshot.
+      const prep = ctx.env.EXECUTION.getByName(`prep-${baseline.lockfileDigest.slice(7, 23)}`);
+      const snap = await prep.prepareSnapshot({ bundle, install: runtime.install, prepBuild: runtime.prepBuild, name: `deps-${def.kind}-${baseline.lockfileDigest.slice(7, 19)}` });
+      await coordinator.wfProgress(lease.jobId, lease.fence, `Dependency snapshot ready (${Math.round(snap.sizeBytes / 1e6)} MB)`);
+      return snap.snapshotId;
+    });
+  }
+  await step.do('record seed', retrying, () => coordinator.wfSeeded(lease.jobId, lease.fence, { headSha, lockfileDigest: baseline.lockfileDigest, snapshotId }));
+}
+
+async function seedFromFiles(ctx: JobContext, canonicalRepo: string, def: ProjectDefinition): Promise<string> {
+  if (def.seed.kind !== 'files') throw new Error('INVALID_STATE not a file seed');
+  const seed = def.seed;
+  await ctx.step.do('ensure canonical repo', retrying, async () => {
+    await ctx.repos.ensureRepo(canonicalRepo, 'Converge canonical synthetic storefront (MIT, synthetic data only)');
     return { ok: true };
   });
-  const seeded = await step.do('push baseline', retrying, async () => {
-    const out = await repos.withTokens([{ name: canonicalRepo, scope: 'write' }], (creds) => {
+  return ctx.step.do('push baseline', retrying, async () => {
+    const out = await ctx.repos.withTokens([{ name: canonicalRepo, scope: 'write' }], (creds) => {
       const c = creds.get(canonicalRepo)!;
-      return broker.seedBaseline({
+      return ctx.broker.seedBaseline({ remote: c.remote, token: c.token, branch: 'main', files: [...seed.files], message: 'Synthetic storefront baseline', timestamp: seed.timestamp });
+    });
+    return out.headSha;
+  });
+}
+
+/**
+ * Import the pinned upstream commit, then apply the operator setup files in one
+ * deterministic commit on top of it. That commit is the session baseline.
+ */
+async function seedFromImport(ctx: JobContext, canonicalRepo: string, def: ProjectDefinition): Promise<string> {
+  if (def.seed.kind !== 'import') throw new Error('INVALID_STATE not an import seed');
+  const seed = def.seed;
+  await ctx.step.do('import upstream', { retries: { limit: 2, delay: '10 seconds', backoff: 'exponential' }, timeout: '10 minutes' }, async () => {
+    await ctx.repos.ensureImport(canonicalRepo, seed.url, 'main', `Converge canonical import of ${seed.url} (pinned ${seed.commit.slice(0, 12)})`);
+    return { ok: true };
+  });
+  return ctx.step.do('apply setup commit', retrying, async () => {
+    const out = await ctx.repos.withTokens([{ name: canonicalRepo, scope: 'write' }], async (creds) => {
+      const c = creds.get(canonicalRepo)!;
+      const head = (await ctx.broker.readHead({ remote: c.remote, token: c.token, branch: 'main' })).sha;
+      // A retry finds main already at the identical deterministic setup commit; anything else is an upstream move.
+      return ctx.broker.commitEdits({
         remote: c.remote,
         token: c.token,
+        baseSha: seed.commit,
         branch: 'main',
-        files: [...STOREFRONT_FILES],
-        message: 'Synthetic storefront baseline',
-        timestamp: SEED_TIMESTAMP,
+        files: seed.setupFiles.map((f) => ({ path: f.path, utf8: f.utf8 })),
+        editablePaths: seed.setupFiles.map((f) => f.path),
+        protectedPaths: [],
+        message: `Configure ${def.kind} for Converge (operator setup)`,
+        timestamp: seed.timestamp,
+      }).catch((err: unknown) => {
+        throw new Error(`INVALID_STATE setup commit failed (main ${head}, pinned ${seed.commit}): ${err instanceof Error ? err.message : String(err)}`);
       });
     });
-    const lock = STOREFRONT_FILES.find((f) => f.path === 'package-lock.json');
-    if (!lock) throw new Error('INVALID_STATE storefront fixture has no package-lock.json');
-    return { headSha: out.headSha, lockfileDigest: await digestBytes(lock.utf8) };
+    return out.headSha;
   });
-  await step.do('record seed', retrying, () => coordinator.wfSeeded(lease.jobId, lease.fence, seeded));
 }
 
 // ---------------- integrate ----------------
@@ -69,7 +121,9 @@ export async function runIntegrate(ctx: JobContext): Promise<void> {
     if (out.status === 'text_conflict') {
       return { status: 'text_conflict' as const, conflictedPaths: out.conflictedPaths, atMerge: out.atMerge };
     }
-    const image = await ctx.env.EXECUTION.getByName('image-probe').imageRef();
+    // Project mode runs candidates from a dependency snapshot; record it as the execution environment.
+    const runtime = await coordinator.getRuntime();
+    const image = runtime.kind === 'project' ? `snapshot:${runtime.snapshotId}` : await ctx.env.EXECUTION.getByName('image-probe').imageRef();
     return { status: 'merged' as const, headSha: out.headSha, treeSha: out.treeSha, executionImageDigest: image };
   });
   await step.do('record assembly', retrying, () => coordinator.wfAssembled(lease.jobId, lease.fence, result));

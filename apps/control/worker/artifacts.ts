@@ -32,6 +32,24 @@ export class ArtifactsRepoHost {
     }
   }
 
+  /** Import a public HTTPS Git repository into `name`, or reconcile an existing import. */
+  async ensureImport(name: string, url: string, branch: string, description: string): Promise<RepoInfo> {
+    RepoName.parse(name);
+    const existing = await this.tryInfo(name);
+    if (existing) return existing;
+    try {
+      const imported = await this.artifacts.import({ source: { url, branch }, target: { name, opts: { description, readOnly: false } } });
+      await this.revoke(name, imported.token).catch(() => undefined);
+    } catch (err) {
+      if (!(await this.listed(name))) {
+        throw new DomainError('DEPENDENCY_UNAVAILABLE', `could not import ${url} into ${name}`, { cause: errorMessage(err) });
+      }
+    }
+    const ready = await this.waitReady(name, 30);
+    if (!ready) throw new DomainError('REPO_NOT_READY', `import ${name} is not ready yet`);
+    return ready;
+  }
+
   /** Fork `source` into `name`, or reconcile an existing fork; waits for readiness with bounded retries. */
   async ensureFork(source: string, name: string, description: string): Promise<RepoInfo> {
     RepoName.parse(name);
