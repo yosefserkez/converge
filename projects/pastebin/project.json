@@ -15,9 +15,10 @@
     "prepBuild": ["pnpm", "build:frontend"],
     "tools": {
       "typecheck": ["pnpm", "exec", "tsc", "--noEmit"],
-      "unit": ["pnpm", "exec", "vitest", "run", "--reporter=default", "--reporter=json", "--outputFile.json=.converge/vitest-report.json"],
+      "unit": ["pnpm", "exec", "vitest", "run"],
       "build": ["pnpm", "build:frontend"]
     },
+    "regression": ["sh", "-c", "mkdir -p .converge && pnpm exec vitest run --reporter=json --outputFile.json=.converge/vitest-report.json > .converge/vitest.log 2>&1; status=$?; cat .converge/vitest-report.json; exit $status"],
     "serve": {
       "argv": ["pnpm", "exec", "wrangler", "dev", "--ip", "0.0.0.0", "--port", "{port}", "--inspector-port", "0", "--persist-to", "{stateDir}", "--var", "DEPLOY_URL:http://localhost:{port}"],
       "readyPath": "/"

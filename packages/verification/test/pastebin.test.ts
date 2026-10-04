@@ -125,10 +125,19 @@ function failures(list: CheckResult[]): Record<string, string[]> {
 async function regressionFor(name: string): Promise<CheckResult> {
   const dir = dirs.get(name) ?? '';
   const startedAt = Date.now();
-  const unit = await runArgv(manifest.runtime.tools.unit, dir, 300_000);
-  const report: unknown = JSON.parse(await readFile(join(dir, '.converge/vitest-report.json'), 'utf8'));
+  // The regression command prints only the JSON report, like the container tool runner sees it.
+  const run = await runArgv(manifest.runtime.regression, dir, 300_000);
+  let report: unknown = null;
+  try {
+    report = JSON.parse(run.output) as unknown;
+  } catch {
+    // regressionResult reports an unreadable report as an error.
+  }
   const result = regressionResult({ candidate: CANDIDATE, harnessDigest: await harnessDigest('pastebin'), startedAt, finishedAt: Date.now() }, report);
-  if (result.status !== 'passed') console.warn(`${name} vitest exit ${unit.exitCode}: ${unit.output.slice(-1500)}`);
+  if (result.status !== 'passed') {
+    const log = await readFile(join(dir, '.converge/vitest.log'), 'utf8').catch(() => '');
+    console.warn(`${name} regression exit ${run.exitCode}: ${log.slice(-1500)}`);
+  }
   return result;
 }
 

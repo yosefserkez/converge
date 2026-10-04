@@ -30,6 +30,8 @@ export const ProjectManifest = z
       install: Argv,
       prepBuild: Argv,
       tools: z.strictObject({ typecheck: Argv, unit: Argv, build: Argv }),
+      /** Runs the project test suite and prints only its Vitest JSON report (input to paste.regression). */
+      regression: Argv,
       serve: z.strictObject({ argv: Argv, readyPath: z.string().regex(/^\/[^\s]*$/) }),
     }),
     protectedPaths: z.array(PathPattern).min(1),
