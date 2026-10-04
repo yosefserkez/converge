@@ -15,6 +15,7 @@ import { runSuite } from '@converge/verification';
 import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
 import type { AgentInput } from './agent.ts';
 import { sealRevision } from './agent.ts';
+import { projectDefinition } from '../projects.ts';
 import { type JobContext, isStaleFence, retrying } from './context.ts';
 
 const MAX_INPUT_TOKENS = 120_000;
@@ -314,6 +315,17 @@ async function executeTool(
       const bundle = await bundleOf(input, files);
       const loaded = await ctx.execution.load(bundle);
       if (loaded.exitCode !== 0) return { check, exitCode: loaded.exitCode, output: loaded.output };
+      const def = projectDefinition(config.PROJECT_KIND);
+      if (def.runtime.kind === 'project') {
+        // Registry commands only. The prep build runs first because project code may import its output.
+        const timeout = config.TOOL_TIMEOUT_SECONDS * 1000;
+        const prep = await ctx.execution.runCommand(def.runtime.prepBuild, timeout);
+        if (prep.exitCode !== 0 || check === 'build') {
+          return { check, exitCode: prep.exitCode, timedOut: prep.timedOut, output: bounded(prep.output), note: 'developer feedback only' };
+        }
+        const r = await ctx.execution.runCommand(def.runtime.tools[check], timeout);
+        return { check, exitCode: r.exitCode, timedOut: r.timedOut, output: bounded(r.output), note: 'developer feedback only' };
+      }
       const r = await ctx.execution.runTool(check, config.TOOL_TIMEOUT_SECONDS * 1000);
       return { check, exitCode: r.exitCode, timedOut: r.timedOut, output: bounded(r.output), note: 'developer feedback only' };
     }
