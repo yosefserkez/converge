@@ -69,7 +69,9 @@ async function seedFromImport(ctx: JobContext, canonicalRepo: string, def: Proje
   if (def.seed.kind !== 'import') throw new Error('INVALID_STATE not an import seed');
   const seed = def.seed;
   await ctx.step.do('import upstream', { retries: { limit: 2, delay: '10 seconds', backoff: 'exponential' }, timeout: '10 minutes' }, async () => {
-    await ctx.repos.ensureImport(canonicalRepo, seed.url, 'main', `Converge canonical import of ${seed.url} (pinned ${seed.commit.slice(0, 12)})`);
+    // Import the upstream default branch (pastebin-worker uses `goshujin`). Converge then creates `main`,
+    // the only production branch Workers Builds deploys, as the setup commit on the pinned commit.
+    await ctx.repos.ensureImport(canonicalRepo, seed.url, undefined, `Converge canonical import of ${seed.url} (pinned ${seed.commit.slice(0, 12)})`);
     return { ok: true };
   });
   return ctx.step.do('apply setup commit', retrying, async () => {

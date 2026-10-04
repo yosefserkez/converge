@@ -231,6 +231,9 @@ export class ProjectCoordinator extends DurableObject<Env> {
           now,
         );
       }
+      // A seed that failed (for example, an upstream fetch error) gets a new attempt.
+      const prior = this.db.one<{ id: string; status: string }>("SELECT id, status FROM job WHERE dedupe_key = ?", `seed:${slug}`);
+      if (prior && (prior.status === 'failed' || prior.status === 'expired')) return queueAttempt(this.db, prior.id, now);
       const j = createJob(this.db, {
         sessionId: null,
         kind: 'seed',

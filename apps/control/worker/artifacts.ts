@@ -33,12 +33,13 @@ export class ArtifactsRepoHost {
   }
 
   /** Import a public HTTPS Git repository into `name`, or reconcile an existing import. */
-  async ensureImport(name: string, url: string, branch: string, description: string): Promise<RepoInfo> {
+  /** `branch` defaults to the remote's default branch. */
+  async ensureImport(name: string, url: string, branch: string | undefined, description: string): Promise<RepoInfo> {
     RepoName.parse(name);
     const existing = await this.tryInfo(name);
     if (existing) return existing;
     try {
-      const imported = await this.artifacts.import({ source: { url, branch }, target: { name, opts: { description, readOnly: false } } });
+      const imported = await this.artifacts.import({ source: { url, ...(branch ? { branch } : {}) }, target: { name, opts: { description, readOnly: false } } });
       await this.revoke(name, imported.token).catch(() => undefined);
     } catch (err) {
       if (!(await this.listed(name))) {
