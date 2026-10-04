@@ -1047,6 +1047,21 @@ export class ProjectCoordinator extends DurableObject<Env> {
     this.db.tx(() => assertFence(this.db, { jobId, fence, leaseMs: this.leaseMs }));
   }
 
+  /**
+   * Live-agent resume point: the state after the last completed turn. A new
+   * attempt for the same proposal and base starts here, not from the baseline.
+   */
+  async wfAgentCheckpoint(jobId: string, fence: number, baseSha: string, stateJson: string): Promise<void> {
+    const job = assertFence(this.db, { jobId, fence, leaseMs: this.leaseMs });
+    if (job.kind !== 'agent') throw new DomainError('INVALID_STATE', 'only agent jobs keep a checkpoint');
+    await this.ctx.storage.put(`agent-resume:${job.entity_id}`, { baseSha, stateJson });
+  }
+
+  async getAgentResume(proposalId: string, baseSha: string): Promise<string | null> {
+    const r = await this.ctx.storage.get<{ baseSha: string; stateJson: string }>(`agent-resume:${proposalId}`);
+    return r && r.baseSha === baseSha ? r.stateJson : null;
+  }
+
   async wfProgress(jobId: string, fence: number, message: string, details: Record<string, unknown> = {}): Promise<void> {
     const now = Date.now();
     this.db.tx(() => {

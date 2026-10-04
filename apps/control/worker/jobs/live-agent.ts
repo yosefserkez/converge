@@ -94,6 +94,9 @@ export async function runLiveAgent(ctx: JobContext, input: AgentInput, baseline:
   }
   const task = await step.do('read task spec', retrying, async () => (await coordinator.getProposal(input.proposalId)).taskSpec as TaskSpec);
   let state: AgentState = { source: baseline, messages: null, inboxCursor: 0, intentVersion: 0, done: null };
+  // A new attempt (for example after the turn limit) continues from the last completed turn.
+  const resumed = await step.do('read resume point', retrying, () => coordinator.getAgentResume(input.proposalId, input.baseSha));
+  if (resumed) state = { ...(JSON.parse(resumed) as AgentState), done: null };
   const startedAt = Date.now();
 
   for (let turn = 0; turn < config.MAX_AGENT_TURNS && !state.done; turn++) {
@@ -102,6 +105,8 @@ export async function runLiveAgent(ctx: JobContext, input: AgentInput, baseline:
       state = await step.do(`turn ${turn}`, { retries: { limit: 1, delay: '5 seconds', backoff: 'constant' }, timeout: '8 minutes' }, () =>
         runTurn(ctx, input, task, prev, turn),
       );
+      const saved = state;
+      await step.do(`save turn ${turn}`, retrying, () => coordinator.wfAgentCheckpoint(lease.jobId, lease.fence, input.baseSha, JSON.stringify(saved)));
     } catch (err) {
       if (isStaleFence(err)) return; // cancelled or superseded: stop quietly
       throw err;
