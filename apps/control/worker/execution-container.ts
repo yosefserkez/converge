@@ -1,5 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DomainError, type SourceBundle, canonicalJson } from '@converge/domain';
+import type { Runtime, ServeSpec } from './runtime-types.ts';
+
+export type { Runtime, ServeSpec } from './runtime-types.ts';
 
 /**
  * Disposable container for UNTRUSTED candidate code. It never receives provider
@@ -17,8 +20,6 @@ const MAX_TOOL_OUTPUT = 32 * 1024;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const encoder = new TextEncoder();
-
-export type Runtime = { kind: 'storefront' } | { kind: 'project'; snapshotId: string };
 
 export interface ExecResult {
   exitCode: number | null;
@@ -42,12 +43,6 @@ export interface AppHttpResponse {
   headers: Record<string, string>;
   bodyText: string;
   truncated: boolean;
-}
-
-/** Serve command for the candidate app. `{port}` and `{stateDir}` are filled in here. */
-export interface ServeSpec {
-  argv: string[];
-  readyPath: string;
 }
 
 const STOREFRONT_SERVE: ServeSpec = { argv: ['node', 'dist/server.mjs'], readyPath: '/healthz' };

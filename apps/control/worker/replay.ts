@@ -13,6 +13,7 @@ const PUBLIC_EVENT_TYPES = new Set([
   'candidate.planned', 'candidate.assembled', 'candidate.testing', 'candidate.passed', 'candidate.failed',
   'candidate.text_conflict', 'candidate.error', 'candidate.validated', 'check.failed', 'check.error',
   'repair.assigned', 'approval.recorded', 'promotion.queued', 'promotion.succeeded', 'promotion.stale', 'promotion.failed',
+  'deploy.verified', 'deploy.version-mismatch', 'deploy.checks-failed',
 ]);
 
 const PUBLIC_PAYLOAD_KEYS = new Set([
@@ -20,7 +21,7 @@ const PUBLIC_PAYLOAD_KEYS = new Set([
   'revisionNo', 'headSha', 'treeSha', 'changedPaths', 'warnings', 'dependencies', 'kind', 'state', 'contractKey',
   'explanation', 'candidateId', 'checkId', 'label', 'members', 'anchor', 'manifestDigest', 'validationDigest',
   'failedCount', 'failedCandidateId', 'failedLabel', 'checks', 'decision', 'targetSha', 'observedRemoteSha',
-  'expectedMainSha', 'reconciled', 'message', 'attemptNo', 'agents',
+  'expectedMainSha', 'reconciled', 'message', 'attemptNo', 'agents', 'url', 'expectedCommit', 'observedVersion', 'failedChecks',
 ]);
 
 type Event = { seq: number; type: string; entityType: string; entityId: string; payload: Record<string, unknown>; visibility: string; createdAt: number };

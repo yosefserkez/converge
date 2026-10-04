@@ -770,6 +770,13 @@ export class ProjectCoordinator extends DurableObject<Env> {
   private async createPreview(actor: string, candidateId: string): Promise<CommandResult> {
     const c = this.candidateRow(candidateId);
     if (!c.head_sha) throw new DomainError('INVALID_STATE', 'candidate is not materialized yet');
+    const def = sessionProject(getSession(this.db, c.session_id));
+    if (def.runtime.kind === 'project') {
+      // The app uses absolute asset paths, which break under the /p/<capability>/ prefix.
+      throw new DomainError('INVALID_STATE', 'previews are not available for this project; open the deployed URL after promotion', {
+        deployUrl: def.deploy?.url ?? null,
+      });
+    }
     const now = Date.now();
     // Reuse a live preview of this exact candidate: same capability, same absolute expiry (never extended).
     const live = this.db.one<{ id: string; resource_id: string; nonce: string; expires_at: number }>(
@@ -1559,6 +1566,33 @@ export class ProjectCoordinator extends DurableObject<Env> {
         payload: { targetSha: prom.target_sha, observedRemoteSha: r.observedRemoteSha, reconciled: Boolean(r.reconciled), message: r.message ?? null },
       }, now);
       finishAttempt(this.db, j, r.state === 'failed' ? 'failed' : 'succeeded', r.state === 'failed' ? 'PROMOTION_FAILED' : null, now);
+    });
+  }
+
+  /**
+   * Deployment observation after a successful promotion. It is evidence only (no
+   * job fence): the guarded push already decided what main is.
+   */
+  async wfDeployObserved(
+    promotionId: string,
+    r: { url: string; expectedCommit: string; observedVersion: string | null; state: 'verified' | 'version-mismatch' | 'checks-failed'; failedChecks: string[]; checks: number; evidence: EvidenceRef },
+  ): Promise<void> {
+    const prom = this.db.one<{ id: string; state: string; target_sha: string; job_id: string }>('SELECT id, state, target_sha, job_id FROM promotion WHERE id = ?', promotionId);
+    if (!prom || prom.state !== 'succeeded' || prom.target_sha !== r.expectedCommit) throw new DomainError('INVALID_STATE', 'no matching successful promotion');
+    const sessionId = this.db.value<string>('SELECT session_id FROM job WHERE id = ?', prom.job_id) ?? null;
+    const now = Date.now();
+    this.db.tx(() => {
+      const evidenceId = this.registerEvidence(sessionId, 'deployment', r.evidence, now);
+      appendEvent(this.db, {
+        sessionId,
+        key: `deploy:${promotionId}:${r.state}`,
+        type: `deploy.${r.state}`,
+        actor: 'system:deploy-observer',
+        entityType: 'promotion',
+        entityId: promotionId,
+        correlationId: sessionId ?? promotionId,
+        payload: { url: r.url, expectedCommit: r.expectedCommit, observedVersion: r.observedVersion, failedChecks: r.failedChecks, checks: r.checks, evidenceId },
+      }, now);
     });
   }
 

@@ -88,7 +88,7 @@ export type Capability = z.infer<typeof Capability>;
 export const TaskSpec = z.object({
   id: Id,
   title: z.string().min(1).max(120),
-  role: z.enum(['pricing', 'caching', 'checkout', 'repair']),
+  role: z.enum(['pricing', 'caching', 'checkout', 'storage', 'api-ui', 'delivery', 'repair']),
   objective: z.string().min(1).max(4000),
   capabilityIds: z.array(Capability),
   editablePaths: z.array(PathPattern).min(1),

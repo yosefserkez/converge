@@ -9,9 +9,12 @@ import {
   type Capability,
   type CheckDefinition,
   type TaskSpec,
+  CHECKS_BY_SUITE,
+  ProjectManifest,
+  projectTaskWithForbiddenPaths,
 } from '@converge/domain';
 import { harnessDigest } from '@converge/verification';
-import type { ServeSpec } from './execution-container.ts';
+import type { ServeSpec } from './runtime-types.ts';
 import { SEED_TIMESTAMP, STOREFRONT_FILES } from './fixtures.ts';
 
 /**
@@ -52,7 +55,43 @@ const STOREFRONT: ProjectDefinition = {
   lockfile: 'package-lock.json',
 };
 
+// Registry projects under projects/<slug>/, bundled at build time.
+const manifests = import.meta.glob('../../../projects/*/project.json', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const setupRaw = import.meta.glob('../../../projects/*/setup/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+
+/** Fixed setup-commit timestamp, so a retried seed reproduces the same commit. */
+const SETUP_TIMESTAMP = 1_790_100_000;
+
+function fromManifest(path: string, text: string): ProjectDefinition {
+  const m = ProjectManifest.parse(JSON.parse(text));
+  const dir = path.slice(0, -'project.json'.length);
+  const setupFiles = Object.entries(m.setupFiles).map(([repoPath, rel]) => {
+    const utf8 = setupRaw[`${dir}${rel}`];
+    if (utf8 === undefined) throw new Error(`INVALID_STATE project ${m.slug} is missing setup file ${rel}`);
+    return { path: repoPath, utf8 };
+  });
+  const suite = m.checkSuite;
+  return {
+    kind: m.slug as ProjectDefinition['kind'],
+    goal: m.goal,
+    tasks: m.tasks.map((t) => projectTaskWithForbiddenPaths(m, t)),
+    baselineFacts: m.baselineFacts,
+    protectedPaths: m.protectedPaths,
+    suite,
+    checks: CHECKS_BY_SUITE[suite],
+    fullGoalCapabilities: [...new Set(m.tasks.flatMap((t) => t.capabilityIds))],
+    seed: { kind: 'import', url: m.source.url, commit: m.source.commit, setupFiles, timestamp: SETUP_TIMESTAMP },
+    runtime: { kind: 'project', install: m.runtime.install, prepBuild: m.runtime.prepBuild, tools: m.runtime.tools, regression: m.runtime.regression, serve: m.runtime.serve },
+    lockfile: 'pnpm-lock.yaml',
+    deploy: m.deploy,
+  };
+}
+
 const REGISTRY: Partial<Record<ProjectDefinition['kind'], ProjectDefinition>> = { storefront: STOREFRONT };
+for (const [path, text] of Object.entries(manifests)) {
+  const def = fromManifest(path, text);
+  REGISTRY[def.kind] = def;
+}
 
 export function projectDefinition(kind: ProjectDefinition['kind']): ProjectDefinition {
   const def = REGISTRY[kind];
@@ -67,6 +106,5 @@ export function registerProject(def: ProjectDefinition): void {
 
 /** Harness digest of a check suite; it changes whenever the suite's checks or expectations change. */
 export function harnessDigestFor(suite: ProjectDefinition['suite']): Promise<string> {
-  if (suite !== 'storefront') throw new Error(`INVALID_STATE no harness for suite ${suite} yet`);
-  return harnessDigest();
+  return harnessDigest(suite);
 }

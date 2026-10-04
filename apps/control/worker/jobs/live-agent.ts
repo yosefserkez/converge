@@ -330,18 +330,28 @@ async function executeTool(
       return { check, exitCode: r.exitCode, timedOut: r.timedOut, output: bounded(r.output), note: 'developer feedback only' };
     }
     case 'request_verification': {
+      const def = projectDefinition(config.PROJECT_KIND);
       const bundle = await bundleOf(input, files);
       const loaded = await ctx.execution.load(bundle);
-      const build = loaded.exitCode === 0 ? await ctx.execution.runTool('build', config.TOOL_TIMEOUT_SECONDS * 1000) : loaded;
+      const timeout = config.TOOL_TIMEOUT_SECONDS * 1000;
+      const build =
+        loaded.exitCode !== 0
+          ? loaded
+          : def.runtime.kind === 'project'
+            ? await ctx.execution.runCommand(def.runtime.prepBuild, timeout)
+            : await ctx.execution.runTool('build', timeout);
       if (build.exitCode !== 0) return { built: false, output: bounded(build.output) };
+      const serve = def.runtime.kind === 'project' ? def.runtime.serve : undefined;
       const results = await runSuite({
+        suite: def.suite,
         target: {
           async startFresh() {
-            await ctx.execution.startApp();
+            await ctx.execution.startApp(serve);
             return { request: (req) => ctx.execution.appRequest(req), stop: () => ctx.execution.stopApp() };
           },
         },
-        capabilities: input.role === 'repair' ? ['membership-pricing', 'quote-cache', 'checkout-summary'] : task.capabilityIds,
+        // A repair answers for the whole goal; a feature answers for its own capabilities.
+        capabilities: input.role === 'repair' ? [...def.fullGoalCapabilities] : task.capabilityIds,
         candidate: { candidateId: 'workspace', headSha: '0'.repeat(40), manifestDigest: `sha256:${'0'.repeat(64)}` },
         maxInstances: 1,
       });

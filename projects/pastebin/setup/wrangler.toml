@@ -32,7 +32,7 @@ enabled = true
 
 [[kv_namespaces]]
 binding = "PB"  # do not touch this
-id = "REPLACE_WITH_KV_ID"  # id of your KV namespace
+id = "5fcf0292c7c6450080a6fae00e442024"  # id of your KV namespace
 
 [[r2_buckets]]
 binding = "R2"  # do not touch this

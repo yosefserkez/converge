@@ -1,13 +1,15 @@
 import {
-  CHECKS,
   type Capability,
+  type CheckDefinition,
   type CheckResult,
   type EvidenceRef,
   type SourceBundle,
   checkApplicability,
   digestBytes,
 } from '@converge/domain';
-import { runSuite, type AppTarget } from '@converge/verification';
+import { regressionResult, runSuite, type AppTarget } from '@converge/verification';
+import type { ServeSpec } from '../runtime-types.ts';
+import { deployedTarget, deployedVersion } from './deploy-target.ts';
 import type { AssembleOutput } from '@converge/infrastructure/git/ops';
 import { evidencePrefix, verifyEvidence, writeEvidence } from '../evidence.ts';
 import { type ProjectDefinition, projectDefinition } from '../projects.ts';
@@ -132,10 +134,10 @@ export async function runIntegrate(ctx: JobContext): Promise<void> {
 // ---------------- verify ----------------
 
 /** Each startFresh() restarts the candidate process inside this attempt's disposable container. */
-function containerTarget(ctx: JobContext): AppTarget {
+function containerTarget(ctx: JobContext, serve?: ServeSpec): AppTarget {
   return {
     async startFresh() {
-      await ctx.execution.startApp();
+      await ctx.execution.startApp(serve);
       return {
         request: (req) => ctx.execution.appRequest(req),
         stop: () => ctx.execution.stopApp(),
@@ -161,23 +163,34 @@ export async function runVerify(ctx: JobContext): Promise<void> {
     return { key: ref.key, sha256: ref.sha256 };
   });
 
+  const def = projectDefinition(config.PROJECT_KIND);
   const outcome = await step.do('run protected checks', once, async () => {
     const bundle = await verifyEvidence<SourceBundle>(env.EVIDENCE, source.key, source.sha256);
+    const meta = { candidateId: input.candidateId, headSha: input.headSha, manifestDigest: input.manifestDigest };
+    const caps = input.capabilities as Capability[];
+    const timeout = config.TOOL_TIMEOUT_SECONDS * 1000;
     try {
       const loaded = await ctx.execution.load(bundle);
-      const build = loaded.exitCode === 0 ? await ctx.execution.runTool('build', config.TOOL_TIMEOUT_SECONDS * 1000) : loaded;
+      const build =
+        loaded.exitCode !== 0
+          ? loaded
+          : def.runtime.kind === 'project'
+            ? await ctx.execution.runCommand(def.runtime.prepBuild, timeout)
+            : await ctx.execution.runTool('build', timeout);
       const log = await writeEvidence(env.EVIDENCE, {
         prefix: evidencePrefix(config.PROJECT_SLUG, input.sessionId, 'logs'),
         body: `$ load + build (${input.headSha})\n${build.output}`,
         visibility: 'private',
       });
       await coordinator.wfRegisterEvidence(lease.jobId, lease.fence, 'log', log);
-      const meta = { candidateId: input.candidateId, headSha: input.headSha, manifestDigest: input.manifestDigest };
-      const caps = input.capabilities as Capability[];
-      const results: CheckResult[] =
-        build.exitCode === 0
-          ? await runSuite({ target: containerTarget(ctx), capabilities: caps, candidate: meta, maxInstances: 1 })
-          : buildErrorResults(meta, input.harnessDigest, caps, build.timedOut ? 'build timed out' : 'candidate build failed');
+      let results: CheckResult[];
+      if (build.exitCode !== 0) {
+        results = buildErrorResults(def.checks, meta, input.harnessDigest, caps, build.timedOut ? 'build timed out' : 'candidate build failed');
+      } else {
+        const serve = def.runtime.kind === 'project' ? def.runtime.serve : undefined;
+        results = await runSuite({ suite: def.suite, target: containerTarget(ctx, serve), capabilities: caps, candidate: meta, maxInstances: 1 });
+        if (def.runtime.kind === 'project') results.push(await regressionCheck(ctx, def.runtime.regression, meta, input.harnessDigest));
+      }
       for (const r of results) {
         const ref: EvidenceRef = await writeEvidence(env.EVIDENCE, {
           prefix: evidencePrefix(config.PROJECT_SLUG, input.sessionId, 'checks'),
@@ -197,6 +210,7 @@ export async function runVerify(ctx: JobContext): Promise<void> {
 }
 
 function buildErrorResults(
+  checks: readonly CheckDefinition[],
   meta: { candidateId: string; headSha: string; manifestDigest: string },
   harnessDigest: string,
   caps: Capability[],
@@ -204,7 +218,7 @@ function buildErrorResults(
 ): CheckResult[] {
   const now = Date.now();
   const set = new Set(caps);
-  return CHECKS.map((c) => {
+  return checks.map((c) => {
     const a = checkApplicability(c, set);
     return {
       schemaVersion: 1 as const,
@@ -223,6 +237,27 @@ function buildErrorResults(
       finishedAt: now,
     };
   });
+}
+
+/**
+ * The project's own test suite runs inside the untrusted container; its JSON
+ * report becomes in-container evidence (a lower trust level than black-box checks).
+ */
+async function regressionCheck(
+  ctx: JobContext,
+  argv: string[],
+  meta: { candidateId: string; headSha: string; manifestDigest: string },
+  harness: string,
+): Promise<CheckResult> {
+  const startedAt = Date.now();
+  const run = await ctx.execution.runCommand(argv, 600_000, 4 * 1024 * 1024);
+  let report: unknown;
+  try {
+    report = JSON.parse(run.output);
+  } catch {
+    report = null;
+  }
+  return regressionResult({ candidate: meta, harnessDigest: harness, startedAt, finishedAt: Date.now() }, report);
 }
 
 // ---------------- promote ----------------
@@ -257,6 +292,55 @@ export async function runPromote(ctx: JobContext): Promise<void> {
       observedRemoteSha: result.observedRemoteSha,
       reconciled: result.reconciled,
       receipt: result.receipt,
+    }),
+  );
+  const def = projectDefinition(config.PROJECT_KIND);
+  if (result.state === 'succeeded' && def.deploy) await observeDeploy(ctx, def, i.promotionId, i.candidateSha);
+}
+
+/**
+ * Workers Builds deploys canonical main after the push. Wait until the live
+ * Worker reports the promoted commit in its version header, then run the
+ * protected black-box checks against production. This records evidence only;
+ * promotion authority stays with the guarded push.
+ */
+async function observeDeploy(ctx: JobContext, def: ProjectDefinition, promotionId: string, sha: string): Promise<void> {
+  const url = def.deploy!.url;
+  const short = sha.slice(0, 12);
+  let version: string | null = null;
+  for (let i = 0; i < 40; i++) {
+    version = await ctx.step.do(`read deployed version ${i}`, retrying, async () => (await deployedVersion(url).catch(() => null)) ?? '');
+    if (version && (version.startsWith(short) || short.startsWith(version))) break;
+    await ctx.step.sleep(`wait for deploy ${i}`, '15 seconds');
+  }
+  const matched = Boolean(version && (version.startsWith(short) || short.startsWith(version)));
+  const evidence = await ctx.step.do('verify deployment', { retries: { limit: 1, delay: '10 seconds', backoff: 'constant' }, timeout: '10 minutes' }, async () => {
+    const results = matched
+      ? await runSuite({
+          suite: def.suite,
+          target: deployedTarget(url),
+          capabilities: [...def.fullGoalCapabilities],
+          candidate: { candidateId: 'deployment', headSha: sha, manifestDigest: `sha256:${'0'.repeat(64)}` },
+          maxInstances: 1,
+        })
+      : [];
+    const ref = await writeEvidence(ctx.env.EVIDENCE, {
+      prefix: evidencePrefix(ctx.config.PROJECT_SLUG, ctx.lease.sessionId ?? 'project', 'receipts'),
+      body: { promotionId, url, expectedCommit: sha, observedVersion: version, matched, results, observedAt: Date.now() },
+      visibility: 'private',
+    });
+    const failed = results.filter((r) => r.applicable && r.status !== 'passed').map((r) => r.checkId);
+    return { ref, failed, checks: results.filter((r) => r.applicable).length };
+  });
+  await ctx.step.do('record deployment', retrying, () =>
+    ctx.coordinator.wfDeployObserved(promotionId, {
+      url,
+      expectedCommit: sha,
+      observedVersion: version,
+      state: !matched ? 'version-mismatch' : evidence.failed.length ? 'checks-failed' : 'verified',
+      failedChecks: evidence.failed,
+      checks: evidence.checks,
+      evidence: evidence.ref,
     }),
   );
 }
