@@ -11,6 +11,7 @@ Last update: 2026-10-04. This file records completed work, actual test outcomes,
 | Project | `pastebin-1` (`PROJECT_KIND=pastebin`); canonical repo `cv-pastebin-1-b-main`, main `92085c6` (setup commit on upstream `0835cac`) |
 | Deployed project | https://pb-converge.converge-42.workers.dev (baseline, `X-Converge-Version: 92085c63c006`) |
 | Pastebin fixture run | `ses_md2fn53dbtnf53567dmdqibyff`: repair candidate `9e599e0` passed all six checks (cancelled to free the project for the live run) |
+| Pastebin production check | Promoted `93a80f0` (deployed by `wrangler deploy --tag` until Workers Builds is connected). Deploy observer: version matched, `views.limit` and `views.cache-safety` **failed in production** (KV eventual consistency). See `docs/project-mode.md` |
 | Pastebin live run (Haiku 4.5) | `ses_frsuscfxw3clnpabyfbd5hssx2` ready. Storage + Conditional reads failed `views.cache-safety`; Repair 1 fixed it; Repair 2 fixed `views.display`. Candidate `93a80f0f68` passed all six checks. Model spend about $1.90 |
 | Earlier storefront project | `cv-storefront-b-main`, main `a663afc` (promoted from the live run) |
 | Public replay (fixture run) | https://converge-preview-dev.converge-42.workers.dev/replay/rpl_x6sgkwykc5ujbdgib32rjco54u |

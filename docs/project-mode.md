@@ -90,6 +90,15 @@ Live session `ses_frsuscfxw3clnpabyfbd5hssx2` (Haiku 4.5, prompt caching, turn c
 
 Two agents reached the 30-turn limit. A retry resumed each one from its last saved turn.
 
+### Promotion and production check
+
+- Promotion `prom_dpm5gyeeftojvqxhjdcltzzfpm` moved canonical `main` from `92085c6` to `93a80f0` with the lease guard.
+- Workers Builds was not connected yet. The operator deployed `93a80f0` with `wrangler deploy --tag 93a80f0f682f`, the same command Workers Builds runs.
+- The deploy observer saw `X-Converge-Version: 93a80f0f682f`, then ran the protected checks against production: **`deploy.checks-failed`**, with `views.limit` and `views.cache-safety` failed. Paste round trip, conditional reads, and the display passed.
+- Cause: the view count lives in KV. KV is eventually consistent: a read at the edge can see the old count for up to about 60 seconds after a write. Read 3 returned 200 with the content; about 60 seconds later the paste was gone (404).
+- Local verification cannot show this: `wrangler dev` has one consistent store. The production check is the only check that found it.
+- Fix direction: keep the view count in a Durable Object (strongly consistent, one instance per paste). This needs an operator change to `wrangler.toml` (a protected file) for the binding and migration.
+
 ## Limits
 
 - One curated project at a time. Adding a project means a reviewed registry entry and fixture/check work.
