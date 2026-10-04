@@ -33,13 +33,16 @@ export class GitBrokerContainer extends DurableObject<Env> {
     const c = this.container;
     // The secret lives in DO storage so a DO restart does not kill a running broker mid-operation.
     let secret = await this.ctx.storage.get<string>('brokerSecret');
-    if (!c.running || !secret) {
-      if (c.running) await c.destroy('restart to set a new broker secret');
+    const image = c.images!.broker!;
+    // A deploy with a new broker image must replace a container that is still running the old one.
+    const stale = (await this.ctx.storage.get<string>('brokerImage')) !== image;
+    if (!c.running || !secret || stale) {
+      if (c.running) await c.destroy(stale ? 'restart on a new broker image' : 'restart to set a new broker secret');
       const bytes = crypto.getRandomValues(new Uint8Array(32));
       secret = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-      await this.ctx.storage.put('brokerSecret', secret);
+      await this.ctx.storage.put({ brokerSecret: secret, brokerImage: image });
       c.start({
-        image: c.images!.broker!,
+        image,
         enableInternet: true,
         instance: 'standard-1',
         env: { BROKER_SHARED_SECRET: secret, PORT: String(BROKER_PORT) },
