@@ -163,7 +163,7 @@ async function runTurn(ctx: JobContext, input: AgentInput, task: TaskSpec, state
     result = await generateText({
       model: anthropic(config.MODEL_ID),
       system: `${SHARED_SYSTEM_INSTRUCTION}\n\nYour editable paths: ${task.editablePaths.join(', ')}. Protected paths you must not edit: ${task.forbiddenPaths.join(', ')}.`,
-      messages,
+      messages: withCacheBreakpoint(messages),
       tools,
       toolChoice: 'auto',
       maxOutputTokens: MAX_OUTPUT_TOKENS,
@@ -425,6 +425,18 @@ async function persistBundle(ctx: JobContext, input: AgentInput, baselineSha: st
     visibility: 'private',
   });
   return { key: ref.key, sha256: ref.sha256 };
+}
+
+/**
+ * Mark the last message as a prompt-cache breakpoint. The next turn then reads
+ * the system prompt, tools, and history from the cache at a tenth of the input
+ * price. Only a copy is marked, so stored history never collects breakpoints.
+ */
+function withCacheBreakpoint(messages: ModelMessage[]): ModelMessage[] {
+  if (messages.length === 0) return messages;
+  const last = messages[messages.length - 1]!;
+  const marked = { ...last, providerOptions: { ...last.providerOptions, anthropic: { ...last.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } } } } as ModelMessage;
+  return [...messages.slice(0, -1), marked];
 }
 
 function bounded(text: string): string {
