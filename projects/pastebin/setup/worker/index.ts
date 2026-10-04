@@ -7,6 +7,9 @@ import { handleGet } from "./handlers/handleRead.js"
 import { handleDelete } from "./handlers/handleDelete.js"
 import { cleanExpiredInR2 } from "./storage/storage.js"
 
+// Converge setup: the Durable Object class for the VIEW_COUNTER binding (wrangler.toml).
+export { ViewCounter } from "./storage/viewCounter.js"
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return withVersionHeader(await handleRequest(request, env, ctx), env)

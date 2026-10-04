@@ -22,6 +22,15 @@ crons = ["0 0 * * *"]
 # Converge: the worker sends the deployed version in X-Converge-Version.
 binding = "CF_VERSION_METADATA"
 
+[[durable_objects.bindings]]
+# Converge: one object per paste keeps its view count with strong consistency (KV is eventually consistent).
+name = "VIEW_COUNTER"
+class_name = "ViewCounter"
+
+[[migrations]]
+tag = "converge-v1-view-counter"
+new_sqlite_classes = ["ViewCounter"]
+
 [observability]
 # enable to collect logs
 enabled = true

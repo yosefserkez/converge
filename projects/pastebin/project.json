@@ -8,7 +8,9 @@
     "wrangler.toml": "setup/wrangler.toml",
     "worker/index.ts": "setup/worker/index.ts",
     "worker/handlers/handleRead.ts": "setup/worker/handlers/handleRead.ts",
-    "worker/storage/cachePolicy.ts": "setup/worker/storage/cachePolicy.ts"
+    "worker/storage/cachePolicy.ts": "setup/worker/storage/cachePolicy.ts",
+    "worker/converge-env.d.ts": "setup/worker/converge-env.d.ts",
+    "worker/storage/viewCounter.ts": "setup/worker/storage/viewCounter.ts"
   },
   "runtime": {
     "install": ["pnpm", "install", "--frozen-lockfile"],
@@ -33,6 +35,7 @@
     "pnpm-lock.yaml",
     "wrangler.toml",
     "worker/index.ts",
+    "worker/converge-env.d.ts",
     "worker-configuration.d.ts",
     "tsconfig.json",
     "worker/tsconfig.json",
@@ -81,7 +84,7 @@
       "editablePaths": ["worker/storage/**", "shared/interfaces.ts", "worker/handlers/handleWrite.ts", "worker/test/converge/storage/**"],
       "requiredCheckIds": ["paste.roundtrip", "paste.regression", "views.limit", "views.cache-safety"],
       "preservedInvariantIds": ["paste-roundtrip", "unlimited-pastes-unchanged", "metadata-reads-free"],
-      "objective": "Add a view limit to pastes. Accept the `views` upload form field: an integer from 1 to 1000. Reject any other value with 400.\nKeep the limit in the paste metadata as `maxViews` and `viewsRemaining`. Old metadata has no view fields. Treat such a paste as unlimited.\nEach content read of a limited paste uses one view. The read that uses the last view deletes the paste. Later reads get 404.\nHEAD requests and metadata reads do not use a view.\nReturn `maxViews` and `viewsRemaining` in the upload and metadata responses. Leave them out for unlimited pastes.\nA limited paste must not be cached. Its responses send Cache-Control: no-store.\nDo not change the behavior of unlimited pastes.\n\nEdit only the storage layer, the shared interfaces, the upload handler, and tests under worker/test/converge/storage/.\nDeclare the read side effects and the metadata fields that you change."
+      "objective": "Add a view limit to pastes. Accept the `views` upload form field: an integer from 1 to 1000. Reject any other value with 400.\nKeep the limit in the paste metadata as `maxViews` and `viewsRemaining`. Old metadata has no view fields. Treat such a paste as unlimited.\nEach content read of a limited paste uses one view.\nKV is eventually consistent: after a write, a read in another place can see the old value for up to 60 seconds. So do not keep the view count in KV. Keep it in the VIEW_COUNTER Durable Object (worker/storage/viewCounter.ts), one object per paste. Use a view in one call to the object, so two reads cannot use the same view. A content read must ask the object before it returns content. The read that uses the last view deletes the paste. Later reads get 404.\nHEAD requests and metadata reads do not use a view.\nReturn `maxViews` and `viewsRemaining` in the upload and metadata responses. Leave them out for unlimited pastes.\nA limited paste must not be cached. Its responses send Cache-Control: no-store.\nDo not change the behavior of unlimited pastes.\n\nEdit only the storage layer, the shared interfaces, the upload handler, and tests under worker/test/converge/storage/.\nDeclare the read side effects and the metadata fields that you change."
     },
     {
       "id": "task-api-ui",
